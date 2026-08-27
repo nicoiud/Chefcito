@@ -16,7 +16,15 @@ arquitectura en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 - ✅ **Fase 3 — Asistente de voz**: preguntas por voz o texto, respuestas
   leídas en voz alta con TTS nativo, cupo diario visible y backend propio
   que controla el costo del LLM.
-- ⏳ **Fase 4 — Realidad Aumentada**: pendiente.
+- ✅ **Fase 4 — Guía de mesada**: muestra dónde va cada ingrediente del
+  paso, con recalibración manual y marcado en verde de lo que la cámara ya
+  reconoció. La vista 2D funciona en todos lados; el passthrough AR sobre
+  la cámara requiere un development build.
+
+  Se eligió **ViroReact en lugar de Unity**: el plugin que haría falta para
+  embeber Unity (`react-native-unity`) está sin mantenimiento desde 2022,
+  y Viro soporta nuestras versiones exactas de Expo y React Native. El
+  razonamiento completo está en [`docs/AR.md`](docs/AR.md).
 
 Cada fase se activa/desactiva mediante flags en
 `src/config/featureFlags.ts`, sin afectar las fases ya construidas.
@@ -32,11 +40,18 @@ que Expo Go no incluye. En vez de romper, la app las detecta y degrada:
 | Cámara y comparación de ingredientes | ✅ funciona, con detector **simulado** | ✅ modelo real on-device |
 | Preguntas al asistente + respuesta hablada | ✅ funciona (escribiendo) | ✅ funciona |
 | Dictado por voz (STT) | ❌ se ofrece escribir | ✅ funciona |
+| Guía de mesada 2D + recalibración | ✅ funciona | ✅ funciona |
+| Marcadores anclados sobre la cámara | ❌ cae a la guía 2D | ⏳ falta integrar Viro |
 
 El detector simulado no hace visión por computadora: recorre los
 ingredientes esperados del paso para que el flujo sea usable sin modelo.
-La pantalla siempre muestra qué motor está activo. Para activar el modelo
-real, los pasos están en `src/vision/modelAsset.ts`.
+La pantalla siempre muestra qué motor está activo.
+
+**Sobre el modelo de visión**: el que se distribuye reconoce de verdad 5
+ingredientes (banana, manzana, naranja, brócoli, zanahoria), pero **no**
+los centrales de las recetas —tomate, cebolla, papa, huevo— porque no
+están en COCO. Para eso hace falta fine-tuning: el toolchain está en
+[`ml/`](ml/) y el detalle en [`docs/VISION_MODEL.md`](docs/VISION_MODEL.md).
 
 ## Requisitos
 
@@ -105,9 +120,14 @@ src/
   components/  # componentes reutilizables (RecipeCard, StepTimer)
   vision/      # Fase 2: detectores, catálogo de ingredientes, hook de cámara
   assistant/   # Fase 3: resolutor local, cupo diario, STT/TTS, cliente LLM
+  ar/          # Fase 4: marcadores, proyección cenital, backend de AR
   utils/       # lógica pura (matching de ingredientes)
   __tests__/   # tests unitarios
 backend/       # Fase 3: endpoint que controla el costo del LLM
+ml/            # Fase 2: entrenamiento y exportación del modelo de visión
+assets/models/ # el modelo .tflite que usa la app
 docs/
-  ARCHITECTURE.md  # decisiones técnicas y modelos de IA/visión por fase
+  ARCHITECTURE.md  # decisiones técnicas por fase
+  VISION_MODEL.md  # qué reconoce el modelo, qué no, y cómo reentrenarlo
+  AR.md            # por qué Viro y no Unity, y cómo está armada la guía
 ```

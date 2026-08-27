@@ -6,12 +6,13 @@
  * - FASE 1 (recetas): siempre activa, es la base de la app.
  * - FASE 2 (cámara/visión on-device): activa.
  * - FASE 3 (asistente de voz + LLM): activa.
- * - FASE 4 (AR con Unity): apagada hasta resolver la integración nativa.
+ * - FASE 4 (guía AR): activa. La guía 2D funciona en todos lados; el
+ *   passthrough AR requiere un development build (ver docs/AR.md).
  */
 export const featureFlags = {
   cameraIngredientDetection: true,
   voiceAssistant: true,
-  arGuidance: false,
+  arGuidance: true,
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

@@ -33,7 +33,7 @@ desactivar sin romper las anteriores:
 |---|---|---|
 | `cameraIngredientDetection` | Fase 2 — visión on-device | activo |
 | `voiceAssistant` | Fase 3 — asistente de voz + LLM | activo |
-| `arGuidance` | Fase 4 — AR con Unity | apagado |
+| `arGuidance` | Fase 4 — guía de mesada / AR | activo |
 
 Apagar un flag saca la pantalla del stack de navegación y esconde su botón de
 acceso, sin romper las fases anteriores.
@@ -66,24 +66,25 @@ implementaciones y `getIngredientDetector()` elige la mejor disponible:
 La UI muestra siempre qué motor está activo, para no dar por real una
 detección simulada.
 
-**Modelo de visión elegido**: YOLOv8n o MobileNet SSD pre-entrenado,
-convertido a TensorFlow Lite (Android) y Core ML (iOS), con fine-tuning
-sobre los ~18 ingredientes de `src/vision/ingredientCatalog.ts` usando un
-dataset chico (100-300 imágenes por clase, partiendo de Food-101 /
-Open Images filtrado). Se elige por:
-- Correr 100% on-device → costo $0 por inferencia, funciona sin conexión.
-- Tener conversión directa y madura a TFLite/Core ML.
-- Tamaño de modelo chico (nano/mobile), apto para apps móviles.
+**Modelo**: YOLOv8n pre-entrenado en COCO, exportado a LiteRT/TFLite con
+cuantización INT8 dinámica (3,2 MB, entrada 320×320). Corre 100% on-device
+→ costo $0 por inferencia y funciona sin conexión.
 
-**Cómo activar el modelo real**: los pasos están en
-`src/vision/modelAsset.ts`. Requiere un development build; el modelo no
-puede correr en Expo Go porque necesita runtime nativo.
+**Cobertura real, que es la limitación importante**: el modelo reconoce
+5 ingredientes del catálogo (banana, manzana, naranja, brócoli,
+zanahoria) porque son clases de COCO, pero **no** los centrales de las
+recetas —tomate, cebolla, papa, huevo, ajo—, que exigen fine-tuning. El
+toolchain para hacerlo está en `ml/`. La cobertura se deriva de las
+etiquetas del modelo (`getIngredientsCoveredByLabels`) en vez de
+escribirse a mano, para que no se desincronice al cambiarlo.
 
-**Puntos de reemplazo si cambia el modelo**: `parseModelOutput()` en
-`tfliteDetector.ts` traduce la salida cruda, y `ingredientCatalog.ts` mapea
-las etiquetas del modelo (en inglés o español) a los ids de las recetas.
-Cambiar de checkpoint no debería tocar nada más. La inferencia debe seguir
-siendo on-device para no romper el principio de costo $0.
+**Puntos de reemplazo si cambia el modelo**: `src/vision/modelAsset.ts`
+(el require al archivo), `src/vision/cocoLabels.ts` (etiquetas y
+geometría de la salida) y `ingredientCatalog.ts` (mapeo de etiquetas a
+ids de recetas). Nada más debería cambiar.
+
+Detalle completo —qué reconoce, por qué cada decisión de exportación, cómo
+reentrenar y qué se verificó— en `docs/VISION_MODEL.md`.
 
 **Ingredientes no detectables**: la sal, el caldo o el aceite no se
 reconocen visualmente, así que se separan del check y se listan aparte en
@@ -132,16 +133,28 @@ reemplazarlo por Firebase o Supabase respetando la interfaz
 integración queda acotado a `backend/src/llm.js` — la app no necesita
 cambios más allá de la URL del endpoint.
 
-## Fase 4 — Realidad Aumentada (no implementada)
+## Fase 4 — Guía de mesada / AR (implementada, con AR pendiente)
 
-- **Motor**: Unity + AR Foundation (ARKit/ARCore con el mismo código
-  base).
-- **Integración con la app principal**: a evaluar al llegar a la fase,
-  entre (a) Unity embebido como módulo nativo dentro de la app RN, o (b)
-  app AR separada abierta por deep link, compartiendo datos de receta vía
-  almacenamiento local.
-- Marcadores visuales simples (formas geométricas + texto), sin modelos 3D
-  complejos.
+- **Motor elegido**: ViroReact (ARKit en iOS, ARCore en Android), **no**
+  Unity. La especificación dejaba la decisión abierta a esta fase; el
+  plugin necesario para embeber Unity está sin mantenimiento desde 2022 y
+  Viro soporta nuestras versiones exactas de Expo y React Native. El
+  razonamiento completo y el costo de revertir están en `docs/AR.md`.
+- **Disposición de marcadores** (`src/ar/markerLayout.ts`): los
+  ingredientes del paso se reparten en un arco frente al ancla, con
+  desborde a un segundo arco. Es lógica pura y testeada, independiente del
+  motor de AR.
+- **Guía 2D** (`src/ar/topDownProjection.ts`): la misma disposición
+  proyectada desde arriba. Funciona en todos lados y es el respaldo donde
+  no hay AR, siguiendo el mismo criterio de degradación que las fases 2 y 3.
+- **Modo verificación**: los ingredientes que la Fase 2 detecta se marcan
+  como confirmados, combinando ambas fases como pide la especificación.
+- **Recalibración manual**: las posiciones son relativas al ancla, así que
+  reanclar mueve el conjunto sin recalcular la disposición.
+
+**Pendiente**: montar la escena de Viro (detección de plano, hit-test para
+anclar, marcadores como geometría + texto) y probarla en condiciones reales
+de cocina. Requiere dispositivo con ARKit/ARCore.
 
 ## Costos estimados
 

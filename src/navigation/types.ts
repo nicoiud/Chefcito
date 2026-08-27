@@ -4,4 +4,5 @@ export type RootStackParamList = {
   CookMode: { recipeId: string };
   IngredientCheck: { recipeId: string; stepIndex: number };
   VoiceAssistant: { recipeId: string; stepIndex: number };
+  ArGuide: { recipeId: string; stepIndex: number };
 };

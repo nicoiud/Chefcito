@@ -69,6 +69,14 @@ export function CookModeScreen({ route, navigation }: Props) {
             <Text style={styles.toolButtonText}>🎙️ Preguntar</Text>
           </Pressable>
         ) : null}
+        {featureFlags.arGuidance ? (
+          <Pressable
+            style={styles.toolButton}
+            onPress={() => navigation.navigate('ArGuide', { recipeId, stepIndex })}
+          >
+            <Text style={styles.toolButtonText}>🎯 Guía de mesada</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.navRow}>

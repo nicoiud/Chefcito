@@ -7,6 +7,7 @@ import { RecipeDetailScreen } from '../screens/RecipeDetailScreen';
 import { CookModeScreen } from '../screens/CookModeScreen';
 import { IngredientCheckScreen } from '../screens/IngredientCheckScreen';
 import { VoiceAssistantScreen } from '../screens/VoiceAssistantScreen';
+import { ArGuideScreen } from '../screens/ArGuideScreen';
 import { featureFlags } from '../config/featureFlags';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -42,6 +43,13 @@ export function RootNavigator() {
             name="VoiceAssistant"
             component={VoiceAssistantScreen}
             options={{ title: 'Asistente' }}
+          />
+        ) : null}
+        {featureFlags.arGuidance ? (
+          <Stack.Screen
+            name="ArGuide"
+            component={ArGuideScreen}
+            options={{ title: 'Guía de mesada' }}
           />
         ) : null}
       </Stack.Navigator>
