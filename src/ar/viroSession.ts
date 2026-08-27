@@ -1,35 +1,33 @@
+import { NativeModules, Platform } from 'react-native';
 import type { ArSession } from './types';
 
 /**
  * Backend de AR sobre ViroReact (ARKit en iOS, ARCore en Android).
  *
- * Se eligió Viro por sobre Unity + AR Foundation. El razonamiento completo
- * está en docs/AR.md; en resumen: `react-native-unity`, el plugin que haría
- * falta para embeber Unity, está sin mantenimiento desde 2022, mientras que
- * Viro declara soporte para nuestras versiones exactas de Expo y React
- * Native. Y los marcadores que pide la especificación son geometría simple
- * más texto, para lo cual Unity es enormemente desproporcionado.
+ * Se eligió Viro por sobre Unity + AR Foundation; el razonamiento está en
+ * docs/AR.md. En resumen: el puente `react-native-unity` está sin
+ * mantenimiento desde 2022, Viro soporta nuestras versiones exactas de
+ * Expo y React Native, y los marcadores que pide la especificación son
+ * geometría simple más texto.
  *
- * Requiere un development build: es un módulo nativo y no existe en Expo Go.
- * Por eso se carga de forma opcional — si no está, la pantalla usa la guía
- * 2D en lugar de romperse.
+ * Detección de disponibilidad: NO alcanza con que el import del paquete
+ * funcione. En Expo Go el JavaScript de Viro carga igual, pero el módulo
+ * nativo no está registrado, así que la escena AR crashearía al montarse.
+ * Por eso se verifica el módulo nativo concreto.
  */
 
-function loadViro(): unknown | null {
-  try {
-    // Require dinámico a propósito: el paquete es opcional.
-    return require('@reactvision/react-viro');
-  } catch {
-    return null;
-  }
+const VIRO_NATIVE_MODULE = 'VRTARSceneNavigatorModule';
+
+function hasViroNativeModule(): boolean {
+  // Web no tiene NativeModules en el sentido de RN.
+  if (Platform.OS === 'web') return false;
+  return Boolean(NativeModules?.[VIRO_NATIVE_MODULE]);
 }
 
 export class ViroArSession implements ArSession {
   readonly name = 'ViroReact (ARKit / ARCore)';
 
-  private module = loadViro();
-
   isAvailable(): boolean {
-    return this.module !== null;
+    return hasViroNativeModule();
   }
 }

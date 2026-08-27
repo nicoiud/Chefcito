@@ -15,6 +15,7 @@ import { getSupportedIngredientIds } from './ingredientCatalog';
  */
 export class SimulatedIngredientDetector implements IngredientDetector {
   readonly name = 'Simulado (sin modelo nativo)';
+  readonly requiresPixels = false;
 
   private expectedIngredientIds: string[] = [];
   private revealedCount = 0;

@@ -8,6 +8,7 @@ import { CookModeScreen } from '../screens/CookModeScreen';
 import { IngredientCheckScreen } from '../screens/IngredientCheckScreen';
 import { VoiceAssistantScreen } from '../screens/VoiceAssistantScreen';
 import { ArGuideScreen } from '../screens/ArGuideScreen';
+import { DiagnosticsScreen } from '../screens/DiagnosticsScreen';
 import { featureFlags } from '../config/featureFlags';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -52,6 +53,11 @@ export function RootNavigator() {
             options={{ title: 'Guía de mesada' }}
           />
         ) : null}
+        <Stack.Screen
+          name="Diagnostics"
+          component={DiagnosticsScreen}
+          options={{ title: 'Diagnóstico' }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

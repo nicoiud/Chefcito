@@ -22,7 +22,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"]
+      "permissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"],
+      "package": "com.chefcito.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -39,6 +40,16 @@
         {
           "microphonePermission": "Chefcito usa el micrófono para que puedas preguntar por voz mientras cocinás.",
           "speechRecognitionPermission": "Chefcito transcribe tu voz para entender tus preguntas mientras cocinás."
+        }
+      ],
+      [
+        "@reactvision/react-viro",
+        {
+          "androidXrMode": ["AR"],
+          "provider": "none",
+          "ios": {
+            "cameraUsagePermission": "Chefcito usa la cámara para mostrarte sobre la mesada dónde va cada ingrediente."
+          }
         }
       ]
     ]

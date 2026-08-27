@@ -4,8 +4,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { recipes } from '../data/recipes';
-import { getDisplayName } from '../vision';
+import { getDisplayName, getIngredientDetector } from '../vision';
 import { useIngredientDetection } from '../vision/useIngredientDetection';
+import { frameToTensor } from '../vision/frameToTensor';
 import type { DetectionFrame } from '../vision/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'IngredientCheck'>;
@@ -18,22 +19,30 @@ export function IngredientCheckScreen({ route }: Props) {
   const cameraRef = useRef<CameraView | null>(null);
   const isCameraReady = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const needsPixels = getIngredientDetector().requiresPixels;
 
   const captureFrame = useCallback(async (): Promise<DetectionFrame | null> => {
     if (!cameraRef.current || !isCameraReady.current) return null;
     const picture = await cameraRef.current.takePictureAsync({
       quality: 0.4,
-      base64: true,
       skipProcessing: true,
     });
     if (!picture) return null;
-    return {
+
+    const frame: DetectionFrame = {
       uri: picture.uri,
       width: picture.width,
       height: picture.height,
-      base64: picture.base64,
     };
-  }, []);
+
+    // El tensor solo se calcula si hay un modelo que lo vaya a consumir:
+    // convertir la imagen cuesta tiempo y el detector simulado no lo usa.
+    if (needsPixels) {
+      frame.pixels = await frameToTensor(picture.uri);
+    }
+
+    return frame;
+  }, [needsPixels]);
 
   const { detectorName, match, notDetectable, error } = useIngredientDetection({
     expectedIngredientIds: step?.ingredientIds ?? [],

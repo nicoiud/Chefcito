@@ -39,6 +39,7 @@ export function getModelCoveredIngredients(): string[] {
 
 export class TfliteIngredientDetector implements IngredientDetector {
   readonly name = 'YOLOv8n on-device (TFLite)';
+  readonly requiresPixels = true;
 
   private module = loadTfliteModule();
   private modelAsset = loadModelAsset();

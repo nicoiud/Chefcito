@@ -22,6 +22,13 @@ export function RecipeListScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.title}>Chefcito 🍳</Text>
         <Pressable
+          style={styles.diagButton}
+          onPress={() => navigation.navigate('Diagnostics')}
+          hitSlop={8}
+        >
+          <Text style={styles.diagButtonText}>🩺</Text>
+        </Pressable>
+        <Pressable
           style={[styles.filterButton, showOnlyFavorites && styles.filterButtonActive]}
           onPress={() => setShowOnlyFavorites((current) => !current)}
         >
@@ -70,6 +77,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#212121',
   },
+  diagButton: {
+    marginLeft: 'auto',
+    marginRight: 8,
+    paddingHorizontal: 4,
+  },
+  diagButtonText: { fontSize: 18 },
   filterButton: {
     paddingVertical: 6,
     paddingHorizontal: 12,

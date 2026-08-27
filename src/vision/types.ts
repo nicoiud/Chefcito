@@ -35,6 +35,11 @@ export interface IngredientDetector {
   readonly name: string;
   /** true si este backend puede ejecutarse en el entorno actual. */
   isAvailable(): boolean;
+  /**
+   * true si `detect` necesita `DetectionFrame.pixels`. Preparar el tensor
+   * cuesta tiempo, así que la pantalla solo lo hace si el backend lo usa.
+   */
+  readonly requiresPixels: boolean;
   /** Ejecuta inferencia sobre un frame y devuelve los ingredientes detectados. */
   detect(frame: DetectionFrame): Promise<DetectedIngredient[]>;
 }

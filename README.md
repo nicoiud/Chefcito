@@ -53,6 +53,22 @@ los centrales de las recetas —tomate, cebolla, papa, huevo— porque no
 están en COCO. Para eso hace falta fine-tuning: el toolchain está en
 [`ml/`](ml/) y el detalle en [`docs/VISION_MODEL.md`](docs/VISION_MODEL.md).
 
+## Probar cámara y AR en un celular
+
+La detección real y la AR necesitan módulos nativos, así que **no corren en
+Expo Go**. Hay que compilar un APK:
+
+```bash
+npm install -g eas-cli && eas login
+eas build --platform android --profile development
+```
+
+Guía completa, qué esperar y cómo reportar problemas:
+[`docs/BUILD_ANDROID.md`](docs/BUILD_ANDROID.md).
+
+Dentro de la app, **🩺 Diagnóstico** (arriba a la derecha en la lista) dice
+qué módulos nativos encontró y qué motor está usando cada fase.
+
 ## Requisitos
 
 - Node.js 18+
