@@ -31,9 +31,12 @@ desactivar sin romper las anteriores:
 
 | Flag | Fase | Estado |
 |---|---|---|
-| `cameraIngredientDetection` | Fase 2 — visión on-device | apagado |
-| `voiceAssistant` | Fase 3 — asistente de voz + LLM | apagado |
+| `cameraIngredientDetection` | Fase 2 — visión on-device | activo |
+| `voiceAssistant` | Fase 3 — asistente de voz + LLM | activo |
 | `arGuidance` | Fase 4 — AR con Unity | apagado |
+
+Apagar un flag saca la pantalla del stack de navegación y esconde su botón de
+acceso, sin romper las fases anteriores.
 
 ## Fase 1 — App base de recetas (implementada)
 
@@ -45,46 +48,89 @@ desactivar sin romper las anteriores:
 - Timer por paso (`StepTimer`) para pasos que declaran `timerSeconds`.
 - Costo: **$0**, no depende de ningún servicio externo.
 
-## Fase 2 — Reconocimiento de ingredientes por cámara (no implementada)
+## Fase 2 — Reconocimiento de ingredientes por cámara (implementada)
 
-**Modelo de visión propuesto**: YOLOv8n o MobileNet SSD pre-entrenado,
+Cámara con `expo-camera`: la pantalla `IngredientCheckScreen` captura un
+frame cada 1,5 s, lo pasa por el detector y compara lo reconocido contra
+los ingredientes del paso actual, con feedback de check verde / pendiente.
+
+**Detector pluggable.** La app no depende de ningún modelo concreto, solo
+de la interfaz `IngredientDetector` (`src/vision/types.ts`). Hay dos
+implementaciones y `getIngredientDetector()` elige la mejor disponible:
+
+| Backend | Cuándo se usa | Qué hace |
+|---|---|---|
+| `TfliteIngredientDetector` | Development build con el módulo nativo y el modelo presentes | Inferencia real on-device |
+| `SimulatedIngredientDetector` | Expo Go y web, donde no hay runtime nativo | Simula el reconocimiento para mantener el flujo usable |
+
+La UI muestra siempre qué motor está activo, para no dar por real una
+detección simulada.
+
+**Modelo de visión elegido**: YOLOv8n o MobileNet SSD pre-entrenado,
 convertido a TensorFlow Lite (Android) y Core ML (iOS), con fine-tuning
-sobre 15-20 ingredientes comunes usando un dataset chico (100-300 imágenes
-por clase, partiendo de Food-101 / Open Images filtrado). Se elige por:
+sobre los ~18 ingredientes de `src/vision/ingredientCatalog.ts` usando un
+dataset chico (100-300 imágenes por clase, partiendo de Food-101 /
+Open Images filtrado). Se elige por:
 - Correr 100% on-device → costo $0 por inferencia, funciona sin conexión.
 - Tener conversión directa y madura a TFLite/Core ML.
 - Tamaño de modelo chico (nano/mobile), apto para apps móviles.
 
-La lógica de comparación entre lo detectado por la cámara y lo esperado
-por el paso actual ya está implementada de forma independiente del modelo
-en `src/utils/ingredientMatch.ts` (con tests en
-`src/__tests__/ingredientMatch.test.ts`), para poder conectarla al modelo
-real sin rediseñar la lógica de negocio. Se activa con el flag
-`cameraIngredientDetection`.
+**Cómo activar el modelo real**: los pasos están en
+`src/vision/modelAsset.ts`. Requiere un development build; el modelo no
+puede correr en Expo Go porque necesita runtime nativo.
 
-**Reemplazo futuro**: si el modelo pre-entrenado no alcanza precisión
-suficiente, evaluar otros checkpoints TFLite/Core ML de detección de
-objetos livianos antes de escalar a un servicio pago — la inferencia debe
-seguir siendo on-device para no romper el principio de costo $0.
+**Puntos de reemplazo si cambia el modelo**: `parseModelOutput()` en
+`tfliteDetector.ts` traduce la salida cruda, y `ingredientCatalog.ts` mapea
+las etiquetas del modelo (en inglés o español) a los ids de las recetas.
+Cambiar de checkpoint no debería tocar nada más. La inferencia debe seguir
+siendo on-device para no romper el principio de costo $0.
 
-## Fase 3 — Asistente de voz (no implementada)
+**Ingredientes no detectables**: la sal, el caldo o el aceite no se
+reconocen visualmente, así que se separan del check y se listan aparte en
+lugar de bloquear la verificación del paso.
 
-- **Voz → texto**: STT nativo del SO (Android `SpeechRecognizer`, iOS
-  `Speech` framework). Gratis, sin límite, no requiere red.
-- **Texto → voz**: TTS nativo del SO (`TextToSpeech` en Android,
-  `AVSpeechSynthesizer` en iOS). Gratis, sin límite.
-- **LLM**: único componente pago del proyecto, vía API económica (ej.
-  Claude Haiku o equivalente de bajo costo). Debe pasar por un backend que
-  valide un límite diario por usuario (ej. 20 mensajes/día) antes de
-  llamar al modelo, para que el costo no escale linealmente con usuarios
-  sin control.
-- **Backend**: endpoint que recibe la pregunta + contexto de receta,
-  valida el contador diario en Firebase/Supabase (tier gratuito), llama al
-  LLM y devuelve la respuesta.
+## Fase 3 — Asistente de voz (implementada)
 
-**Reemplazo futuro**: si el proveedor de LLM cambia de precios, el punto
-de integración queda acotado al endpoint del backend — la app no debería
-necesitar cambios más allá de la URL/contrato del endpoint.
+- **Voz → texto**: STT nativo del SO vía `expo-speech-recognition`
+  (`SpeechRecognizer` en Android, `Speech` framework en iOS), con
+  `requiresOnDeviceRecognition`. Gratis y sin salir del dispositivo — por
+  eso se evita Whisper por API, que cobra por minuto transcripto. Es un
+  módulo nativo: se carga de forma opcional y, donde no está (Expo Go,
+  web), la pantalla ofrece escribir la pregunta.
+- **Texto → voz**: TTS nativo del SO vía `expo-speech`. Gratis, sin límite.
+- **LLM**: `claude-haiku-4-5`, el más económico de la familia, con
+  `max_tokens: 400`. Es el único componente con costo variable.
+
+### Las tres capas de control de costo
+
+1. **Resolutor local** (`src/assistant/localAnswers.ts`). Las preguntas
+   frecuentes mientras se cocina — qué ingredientes lleva, repetir el paso,
+   cuánto falta, cuántas porciones — se responden con datos que ya están en
+   el dispositivo. No llaman al LLM ni consumen cupo, y la UI lo marca como
+   "respondido sin conexión · sin costo". Es la capa que más reduce la
+   factura: saca del LLM lo que no necesita un LLM.
+2. **Límite diario** (20 mensajes/usuario/día). El contador del cliente
+   (`dailyLimit.ts`) es solo para mostrar el cupo; **el que manda es el
+   backend**, porque el cliente es manipulable.
+3. **Cotas de tamaño**. El backend rechaza preguntas de más de 500
+   caracteres y acota el contexto que manda al modelo, porque los tokens de
+   entrada también se pagan.
+
+### Backend
+
+`backend/` es un servidor Node sin framework cuya única razón de existir es
+el control de costo: guarda la API key (que nunca viaja en la app), valida
+el cupo **antes** de llamar al modelo y devuelve 429 si se agotó. Un fallo
+del modelo no le consume cupo al usuario. Sin `ANTHROPIC_API_KEY` levanta
+en modo demo, para poder probar el contrato y el límite sin gastar dinero.
+
+El contador está en memoria (`usageStore.js`): para producción hay que
+reemplazarlo por Firebase o Supabase respetando la interfaz
+`getCount` / `increment`. Ver `backend/README.md`.
+
+**Reemplazo futuro**: si el proveedor de LLM cambia de precios, el punto de
+integración queda acotado a `backend/src/llm.js` — la app no necesita
+cambios más allá de la URL del endpoint.
 
 ## Fase 4 — Realidad Aumentada (no implementada)
 

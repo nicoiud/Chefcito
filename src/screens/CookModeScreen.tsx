@@ -4,6 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { recipes } from '../data/recipes';
 import { StepTimer } from '../components/StepTimer';
+import { featureFlags } from '../config/featureFlags';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CookMode'>;
 
@@ -48,6 +49,25 @@ export function CookModeScreen({ route, navigation }: Props) {
         <Text style={styles.stepText}>{currentStep.instruction}</Text>
         {currentStep.timerSeconds ? (
           <StepTimer durationSeconds={currentStep.timerSeconds} />
+        ) : null}
+      </View>
+
+      <View style={styles.toolsRow}>
+        {featureFlags.cameraIngredientDetection ? (
+          <Pressable
+            style={styles.toolButton}
+            onPress={() => navigation.navigate('IngredientCheck', { recipeId, stepIndex })}
+          >
+            <Text style={styles.toolButtonText}>📷 Verificar ingredientes</Text>
+          </Pressable>
+        ) : null}
+        {featureFlags.voiceAssistant ? (
+          <Pressable
+            style={styles.toolButton}
+            onPress={() => navigation.navigate('VoiceAssistant', { recipeId, stepIndex })}
+          >
+            <Text style={styles.toolButtonText}>🎙️ Preguntar</Text>
+          </Pressable>
         ) : null}
       </View>
 
@@ -98,6 +118,25 @@ const styles = StyleSheet.create({
     color: '#212121',
     textAlign: 'center',
     lineHeight: 34,
+  },
+  toolsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  toolButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#FFF3E0',
+    marginHorizontal: 4,
+    marginBottom: 6,
+  },
+  toolButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#E65100',
   },
   navRow: {
     flexDirection: 'row',

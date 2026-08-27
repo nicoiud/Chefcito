@@ -7,7 +7,12 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Chefcito usa la cámara para reconocer los ingredientes del paso que estás cocinando. Las imágenes se procesan en tu dispositivo y no se envían a ningún servidor.",
+        "NSMicrophoneUsageDescription": "Chefcito usa el micrófono para que puedas preguntar por voz mientras cocinás con las manos ocupadas.",
+        "NSSpeechRecognitionUsageDescription": "Chefcito transcribe tu voz en el dispositivo para entender tus preguntas mientras cocinás."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -16,10 +21,26 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Chefcito usa la cámara para reconocer los ingredientes del paso que estás cocinando."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Chefcito usa el micrófono para que puedas preguntar por voz mientras cocinás.",
+          "speechRecognitionPermission": "Chefcito transcribe tu voz para entender tus preguntas mientras cocinás."
+        }
+      ]
+    ]
   }
 }

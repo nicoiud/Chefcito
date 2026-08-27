@@ -5,6 +5,9 @@ import type { RootStackParamList } from './types';
 import { RecipeListScreen } from '../screens/RecipeListScreen';
 import { RecipeDetailScreen } from '../screens/RecipeDetailScreen';
 import { CookModeScreen } from '../screens/CookModeScreen';
+import { IngredientCheckScreen } from '../screens/IngredientCheckScreen';
+import { VoiceAssistantScreen } from '../screens/VoiceAssistantScreen';
+import { featureFlags } from '../config/featureFlags';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -27,6 +30,20 @@ export function RootNavigator() {
           component={CookModeScreen}
           options={{ title: 'Modo cocinar', headerBackTitle: 'Salir' }}
         />
+        {featureFlags.cameraIngredientDetection ? (
+          <Stack.Screen
+            name="IngredientCheck"
+            component={IngredientCheckScreen}
+            options={{ title: 'Verificar ingredientes' }}
+          />
+        ) : null}
+        {featureFlags.voiceAssistant ? (
+          <Stack.Screen
+            name="VoiceAssistant"
+            component={VoiceAssistantScreen}
+            options={{ title: 'Asistente' }}
+          />
+        ) : null}
       </Stack.Navigator>
     </NavigationContainer>
   );
