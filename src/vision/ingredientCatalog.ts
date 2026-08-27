@@ -29,6 +29,8 @@ export const ingredientCatalog: CatalogEntry[] = [
   { id: 'morron', displayName: 'Morrón', aliases: ['bell pepper', 'pepper', 'morron', 'pimiento'] },
   { id: 'zapallo', displayName: 'Zapallo', aliases: ['pumpkin', 'squash', 'zapallo'] },
   { id: 'limon', displayName: 'Limón', aliases: ['lemon', 'limon'] },
+  { id: 'naranja', displayName: 'Naranja', aliases: ['orange', 'naranja'] },
+  { id: 'brocoli', displayName: 'Brócoli', aliases: ['broccoli', 'brocoli'] },
   { id: 'manzana', displayName: 'Manzana', aliases: ['apple', 'manzana'] },
   { id: 'banana', displayName: 'Banana', aliases: ['banana', 'plantano', 'platano'] },
   { id: 'queso', displayName: 'Queso', aliases: ['cheese', 'queso'] },
@@ -65,7 +67,25 @@ export function getDisplayName(ingredientId: string): string {
   return entry ? entry.displayName : ingredientId;
 }
 
-/** Ids que el modelo de visión es capaz de reconocer. */
+/** Todos los ingredientes del catálogo (el objetivo del modelo entrenado). */
 export function getSupportedIngredientIds(): string[] {
   return ingredientCatalog.map((entry) => entry.id);
+}
+
+/**
+ * Qué ingredientes del catálogo cubre realmente un modelo, derivado de las
+ * etiquetas que ese modelo sabe emitir.
+ *
+ * Se calcula en vez de escribirse a mano para que no se desincronice al
+ * cambiar de modelo: el modelo COCO que se distribuye hoy cubre solo una
+ * parte del catálogo, y la app necesita saber cuál para no prometer
+ * detecciones que no puede hacer.
+ */
+export function getIngredientsCoveredByLabels(labels: string[]): string[] {
+  const covered = new Set<string>();
+  for (const label of labels) {
+    const id = resolveIngredientId(label);
+    if (id) covered.add(id);
+  }
+  return [...covered];
 }

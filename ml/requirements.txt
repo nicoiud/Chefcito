@@ -1,0 +1,16 @@
+# Toolchain de entrenamiento y exportación del modelo de visión (Fase 2).
+# Solo hace falta para regenerar el modelo; la app no depende de esto.
+#
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r ml/requirements.txt
+
+ultralytics>=8.4.0
+
+# Necesarios para exportar a LiteRT/TFLite
+tensorflow-cpu
+onnx
+onnx2tf
+onnxslim
+onnxruntime
+sng4onnx
+ai-edge-litert

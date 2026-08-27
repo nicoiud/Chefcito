@@ -1,0 +1,40 @@
+# Dataset de fine-tuning para el detector de ingredientes de Chefcito.
+#
+# Las clases y su orden DEBEN coincidir con `names` de abajo, porque el
+# índice de clase que emite el modelo es lo que después se traduce en
+# src/vision/ingredientCatalog.ts. Si cambiás el orden acá, hay que
+# regenerar la lista de etiquetas de la app (ver ml/README.md).
+#
+# Estructura esperada de carpetas (formato YOLO):
+#   datasets/ingredientes/
+#     images/train/*.jpg      labels/train/*.txt
+#     images/val/*.jpg        labels/val/*.txt
+#
+# Cada .txt tiene una línea por objeto:  <clase> <cx> <cy> <w> <h>
+# con coordenadas normalizadas 0..1 relativas al tamaño de la imagen.
+
+path: ../datasets/ingredientes
+train: images/train
+val: images/val
+
+names:
+  0: tomato
+  1: onion
+  2: garlic
+  3: potato
+  4: egg
+  5: carrot
+  6: bell pepper
+  7: pumpkin
+  8: lemon
+  9: apple
+  10: banana
+  11: orange
+  12: broccoli
+  13: cheese
+  14: milk
+  15: butter
+  16: flour
+  17: lentils
+  18: basil
+  19: mozzarella

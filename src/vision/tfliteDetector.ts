@@ -1,20 +1,18 @@
 import type { DetectedIngredient, DetectionFrame, IngredientDetector } from './types';
-import { mapModelOutputToIngredients, type RawDetection } from './postprocess';
+import { mapModelOutputToIngredients } from './postprocess';
 import { loadModelAsset } from './modelAsset';
+import { decodeYoloOutput } from './yoloDecode';
+import { COCO_LABELS, COCO_MODEL_NUM_ANCHORS } from './cocoLabels';
+import { getIngredientsCoveredByLabels } from './ingredientCatalog';
 
 /**
- * Detector on-device respaldado por TensorFlow Lite / Core ML.
+ * Detector on-device respaldado por TensorFlow Lite / LiteRT.
  *
  * Requiere un development build: `react-native-fast-tflite` es un módulo
- * nativo y no está incluido en Expo Go. Por eso el módulo se carga de forma
- * opcional — si no está instalado, este detector se reporta como no
- * disponible y la app cae al detector simulado sin romperse.
- *
- * Los pasos para activarlo están en src/vision/modelAsset.ts.
- *
- * El modelo esperado es un detector de objetos liviano (YOLOv8n o
- * MobileNet SSD) afinado sobre el catálogo de src/vision/ingredientCatalog.ts.
- * Ver docs/ARCHITECTURE.md para la justificación de esa elección.
+ * nativo y no está en Expo Go. Por eso se carga de forma opcional — si falta
+ * el módulo o el modelo, el detector se reporta no disponible y la app cae al
+ * detector simulado sin romperse. Los pasos de activación están en
+ * `docs/VISION_MODEL.md`.
  */
 
 interface TfliteModule {
@@ -22,20 +20,25 @@ interface TfliteModule {
 }
 
 interface TfliteModel {
-  run: (inputs: unknown[]) => Promise<unknown[]>;
+  run: (inputs: unknown[]) => Promise<ArrayLike<number>[]>;
 }
 
 function loadTfliteModule(): TfliteModule | null {
   try {
-    // El require es dinámico a propósito: el paquete es opcional.
+    // Require dinámico a propósito: el paquete es opcional.
     return require('react-native-fast-tflite') as TfliteModule;
   } catch {
     return null;
   }
 }
 
+/** Ingredientes que el modelo distribuido reconoce de verdad. */
+export function getModelCoveredIngredients(): string[] {
+  return getIngredientsCoveredByLabels(COCO_LABELS);
+}
+
 export class TfliteIngredientDetector implements IngredientDetector {
-  readonly name = 'TensorFlow Lite (on-device)';
+  readonly name = 'YOLOv8n on-device (TFLite)';
 
   private module = loadTfliteModule();
   private modelAsset = loadModelAsset();
@@ -50,7 +53,7 @@ export class TfliteIngredientDetector implements IngredientDetector {
     if (!this.module || !this.modelAsset) {
       throw new Error(
         'El modelo on-device no está disponible. Requiere un development build ' +
-          'con react-native-fast-tflite y el archivo del modelo (ver src/vision/modelAsset.ts).'
+          'con react-native-fast-tflite (ver docs/VISION_MODEL.md).'
       );
     }
 
@@ -58,27 +61,12 @@ export class TfliteIngredientDetector implements IngredientDetector {
       this.model = await this.module.loadTensorflowModel(this.modelAsset);
     }
 
-    const outputs = await this.model.run([frame]);
-    return mapModelOutputToIngredients(parseModelOutput(outputs));
+    const [output] = await this.model.run([frame.pixels]);
+    const rawDetections = decodeYoloOutput(output, {
+      labels: COCO_LABELS,
+      numAnchors: COCO_MODEL_NUM_ANCHORS,
+    });
+
+    return mapModelOutputToIngredients(rawDetections);
   }
-}
-
-/**
- * Traduce la salida del modelo al formato intermedio `RawDetection`.
- * La forma exacta depende del checkpoint exportado, por eso queda aislada
- * acá: cambiar de modelo solo debería requerir cambiar esta función.
- */
-function parseModelOutput(outputs: unknown[]): RawDetection[] {
-  const [detections] = outputs;
-  if (!Array.isArray(detections)) return [];
-
-  return detections
-    .filter(
-      (d): d is { label: string; confidence: number } =>
-        typeof d === 'object' &&
-        d !== null &&
-        typeof (d as { label?: unknown }).label === 'string' &&
-        typeof (d as { confidence?: unknown }).confidence === 'number'
-    )
-    .map((d) => ({ label: d.label, confidence: d.confidence }));
 }
