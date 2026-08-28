@@ -67,7 +67,12 @@ export function createServer({ usageStore = createInMemoryUsageStore(), llm = cr
     }
 
     if (req.method === 'GET' && req.url === '/health') {
-      sendJson(res, 200, { ok: true, llmConfigured: llm.isConfigured });
+      sendJson(res, 200, {
+        ok: true,
+        llmConfigured: llm.isConfigured,
+        provider: llm.name ?? 'desconocido',
+        dailyLimit: DAILY_MESSAGE_LIMIT,
+      });
       return;
     }
 

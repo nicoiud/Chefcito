@@ -63,8 +63,9 @@ npm install -g eas-cli && eas login
 eas build --platform android --profile development
 ```
 
-Guía completa, qué esperar y cómo reportar problemas:
-[`docs/BUILD_ANDROID.md`](docs/BUILD_ANDROID.md).
+Guía completa —incluyendo cómo conectar el celular al backend y qué probar
+en qué orden— en [`docs/TESTEO_MVP.md`](docs/TESTEO_MVP.md). Detalles del
+build en [`docs/BUILD_ANDROID.md`](docs/BUILD_ANDROID.md).
 
 Dentro de la app, **🩺 Diagnóstico** (arriba a la derecha en la lista) dice
 qué módulos nativos encontró y qué motor está usando cada fase.
@@ -95,10 +96,13 @@ Las preguntas sobre la receta —"¿qué ingredientes lleva?", "¿cuál era el
 paso?", "¿cuánto falta?"— se responden **en el dispositivo**, sin llamar al
 LLM y sin consumir cupo. Solo las preguntas abiertas van al modelo.
 
-Para esas últimas hace falta levantar el backend:
+Para esas últimas hace falta levantar el backend. Se puede usar **Ollama
+local, gratis**, sin API key ni internet:
 
 ```bash
-cd backend && npm install && npm start
+ollama pull llama3.2
+cd backend && npm install
+LLM_PROVIDER=ollama npm start
 ```
 
 Y apuntar la app al endpoint, con un `.env` en la raíz del repo:
@@ -107,9 +111,10 @@ Y apuntar la app al endpoint, con un `.env` en la raíz del repo:
 EXPO_PUBLIC_ASSISTANT_API_URL=http://localhost:3000/ask
 ```
 
-Sin `ANTHROPIC_API_KEY` el backend corre en modo demo y responde con un
-texto fijo, lo que permite probar todo el circuito sin gastar dinero.
-Detalles en [`backend/README.md`](backend/README.md).
+Para producción se cambia a `LLM_PROVIDER=anthropic` con la API key en el
+servidor: los usuarios finales no tienen Ollama corriendo en su casa. La
+interfaz es la misma, así que es solo una variable de entorno. Detalles en
+[`backend/README.md`](backend/README.md).
 
 Si no levantás el backend, la app sigue funcionando: solo las preguntas
 abiertas avisan que el asistente no está configurado.
@@ -146,4 +151,6 @@ docs/
   ARCHITECTURE.md  # decisiones técnicas por fase
   VISION_MODEL.md  # qué reconoce el modelo, qué no, y cómo reentrenarlo
   AR.md            # por qué Viro y no Unity, y cómo está armada la guía
+  TESTEO_MVP.md    # qué falta para probar todo en un celular real
+  PRIVACIDAD.md    # política de privacidad (requisito de Play Store)
 ```
