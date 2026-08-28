@@ -46,7 +46,7 @@ muestra la guía 2D.
 En tu computadora:
 
 ```bash
-ollama pull llama3.2
+ollama pull qwen3:7b
 
 # Importante: por defecto Ollama solo escucha en localhost y el celular
 # no lo alcanzaría.
@@ -57,8 +57,12 @@ En otra terminal:
 
 ```bash
 cd backend && npm install
-LLM_PROVIDER=ollama npm start
+LLM_PROVIDER=ollama OLLAMA_MODEL=qwen3:7b npm start
 ```
+
+Sobre qué modelo elegir según tu GPU, ver [`backend/README.md`](../backend/README.md).
+Resumen: el asistente responde tres oraciones en español, así que un 7B
+alcanza de sobra y uno más grande solo agrega demora.
 
 ### Conectar el celular
 

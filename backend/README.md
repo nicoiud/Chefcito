@@ -33,12 +33,28 @@ cd backend && npm install
 ### Gratis, con Ollama (recomendado para probar)
 
 ```bash
-ollama pull llama3.2
-LLM_PROVIDER=ollama npm start
+ollama pull qwen3:7b
+LLM_PROVIDER=ollama OLLAMA_MODEL=qwen3:7b npm start
 ```
 
 Se puede cambiar el modelo con `OLLAMA_MODEL` y la dirección con
-`OLLAMA_URL`.
+`OLLAMA_URL`. El default es `llama3.2` (3B) porque anda en cualquier
+máquina, pero si tenés GPU conviene algo mejor.
+
+#### Qué modelo elegir
+
+El asistente responde **tres oraciones en español rioplatense**. No
+necesita razonamiento profundo ni contexto largo: necesita buen español y
+velocidad, porque la persona está esperando con las manos ocupadas.
+
+| VRAM | Modelo sugerido | Por qué |
+|---|---|---|
+| 4-6 GB | `llama3.2` (3B) | Es el default: entra en casi cualquier lado |
+| 8-12 GB | **`qwen3:7b`** | Fuerte en idiomas no ingleses, ~7 GB, rápido |
+| 8-12 GB | `mistral-nemo` (12B) | Alternativa: bueno en lenguas europeas |
+
+Un modelo más grande no mejora nada acá y solo agrega demora. Para
+respuestas de tres oraciones, 7B rinde de sobra.
 
 ### Con Claude (producción)
 
