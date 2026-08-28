@@ -80,27 +80,46 @@ python ml/export_model.py --weights yolov8n.pt --out assets/models/
 Lo que **no** está verificado: la precisión sobre fotos reales de cocina.
 Eso requiere el dataset y el fine-tuning.
 
+## Cuando el modelo falla: la corrección del usuario
+
+Ningún modelo va a reconocer todos los ingredientes. El catálogo se limita
+a lo que existe anotado en datasets públicos, y cosas como la sal o el
+caldo no son detectables ni en principio. Por eso la app le da la última
+palabra al usuario, con dos mecanismos (ver `src/vision/corrections.ts`):
+
+**"Ya lo tengo"** — el usuario marca a mano un ingrediente que la cámara no
+ve. El paso se completa igual. Esto hace que la cobertura del modelo deje
+de ser un techo duro: la función es usable incluso para ingredientes que el
+modelo nunca va a reconocer.
+
+**"No es eso"** — cuando el modelo detecta mal, el usuario elige qué es en
+realidad. La corrección se guarda y se vuelve a aplicar cada vez que el
+modelo emita esa misma etiqueta, así el error no se repite en esa cocina.
+
+El historial de correcciones queda guardado y es exportable. Son
+exactamente los casos donde el modelo falló, así que es el material más
+valioso para la próxima iteración del entrenamiento.
+
 ## Fine-tuning: lo que falta
 
 ```bash
-# 1. Armar el dataset en formato YOLO (ver ml/ingredients.yaml)
-#    datasets/ingredientes/images/{train,val} + labels/{train,val}
-# 2. Entrenar
-python ml/train.py --epochs 100
-# 3. Exportar
+python ml/build_dataset.py --max-per-class 300   # arma el dataset
+python ml/train.py --epochs 100                   # entrena
 python ml/export_model.py --weights runs/detect/train/weights/best.pt
-# 4. Actualizar en la app:
-#    - src/vision/modelAsset.ts  -> require al nuevo .tflite
-#    - src/vision/cocoLabels.ts  -> etiquetas y numAnchors del modelo nuevo
+# Después actualizar en la app:
+#   src/vision/modelAsset.ts  -> require al nuevo .tflite
+#   src/vision/cocoLabels.ts  -> etiquetas y numAnchors del modelo nuevo
 ```
 
-**Dataset**: 100-300 imágenes por ingrediente es el punto de partida
-razonable. Fuentes posibles: Open Images filtrado por categoría de
-alimentos (tiene bounding boxes ya anotadas para varias frutas y
-verduras), Food-101 (clasificación, sirve como base pero hay que anotar
-cajas) y fotos propias, que son las más valiosas porque son las que se
-parecen a lo que va a ver la cámara: mesada, luz de cocina, ingredientes
-parcialmente tapados.
+**Dataset**: `ml/build_dataset.py` baja Open Images y lo convierte a
+formato YOLO. Se verificó que resuelve **40 clases de comida** con
+bounding box, entre ellas las que hoy faltan: tomate, papa, huevo, queso,
+pan, hongos, morrón y calabaza. Eso llevaría la cobertura de 5 a ~40.
+
+**Lo que sigue sin cubrir**: cebolla y ajo no están anotados en Open
+Images pese a ser básicos para cocinar; para esos hay que anotar fotos
+propias. Y como las fotos del dataset son de stock (fondo limpio, buena
+luz), conviene sumar fotos en condiciones reales de mesada.
 
 **Sobre el hardware**: en CPU el entrenamiento tarda horas. Con GPU baja a
 minutos.

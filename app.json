@@ -12,7 +12,8 @@
         "NSCameraUsageDescription": "Chefcito usa la cámara para reconocer los ingredientes del paso que estás cocinando. Las imágenes se procesan en tu dispositivo y no se envían a ningún servidor.",
         "NSMicrophoneUsageDescription": "Chefcito usa el micrófono para que puedas preguntar por voz mientras cocinás con las manos ocupadas.",
         "NSSpeechRecognitionUsageDescription": "Chefcito transcribe tu voz en el dispositivo para entender tus preguntas mientras cocinás."
-      }
+      },
+      "bundleIdentifier": "com.chefcito.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,8 +23,12 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"],
-      "package": "com.chefcito.app"
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.chefcito.app",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -45,13 +50,17 @@
       [
         "@reactvision/react-viro",
         {
-          "androidXrMode": ["AR"],
+          "androidXrMode": [
+            "AR"
+          ],
           "provider": "none",
           "ios": {
             "cameraUsagePermission": "Chefcito usa la cámara para mostrarte sobre la mesada dónde va cada ingrediente."
           }
         }
       ]
-    ]
+    ],
+    "description": "Recetas paso a paso para cocinar sin perderte: modo cocinar con temporizador, favoritos y un asistente que te responde mientras tenés las manos ocupadas.",
+    "primaryColor": "#FB8C00"
   }
 }
