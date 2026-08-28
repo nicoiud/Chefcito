@@ -92,8 +92,19 @@ export const ingredientCatalog: CatalogEntry[] = [
   { id: 'albahaca', displayName: 'Albahaca', aliases: ['basil', 'albahaca'] },
 ];
 
-/** Confianza mínima para considerar válida una detección. */
-export const DETECTION_CONFIDENCE_THRESHOLD = 0.5;
+/**
+ * Confianza mínima para considerar válida una detección.
+ *
+ * Elegido midiendo sobre 63 fotos reales de comida: a 0,5 el modelo
+ * reconoce el 76% y a 0,35 el 78%, con la misma cantidad de falsos
+ * positivos. Bajar más sube el recall pero empieza a inventar, y eso en la
+ * cocina es peor que no detectar: decirle a alguien que ya puso la cebolla
+ * cuando no la puso rompe la confianza en la función.
+ *
+ * El suavizado temporal (ver `temporalSmoothing.ts`) es lo que permite
+ * sostener este umbral sin que las detecciones parpadeen.
+ */
+export const DETECTION_CONFIDENCE_THRESHOLD = 0.35;
 
 const aliasToId = new Map<string, string>();
 for (const entry of ingredientCatalog) {

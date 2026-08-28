@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootStackParamList } from './types';
 import { RecipeListScreen } from '../screens/RecipeListScreen';
@@ -10,13 +10,37 @@ import { VoiceAssistantScreen } from '../screens/VoiceAssistantScreen';
 import { ArGuideScreen } from '../screens/ArGuideScreen';
 import { DiagnosticsScreen } from '../screens/DiagnosticsScreen';
 import { featureFlags } from '../config/featureFlags';
+import { useTheme } from '../theme/ThemeContext';
+import { fonts } from '../theme/tokens';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
+  const theme = useTheme();
+
+  const navTheme = {
+    ...(theme.dark ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(theme.dark ? DarkTheme : DefaultTheme).colors,
+      primary: theme.color.acento,
+      background: theme.color.fondo,
+      card: theme.color.fondo,
+      text: theme.color.texto,
+      border: theme.color.borde,
+    },
+  };
+
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerTintColor: '#FB8C00' }}>
+    <NavigationContainer theme={navTheme}>
+      <Stack.Navigator
+        screenOptions={{
+          headerTintColor: theme.color.acento,
+          headerStyle: { backgroundColor: theme.color.fondo },
+          headerTitleStyle: { fontFamily: fonts.displaySemi, fontSize: 17 },
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: theme.color.fondo },
+        }}
+      >
         <Stack.Screen
           name="RecipeList"
           component={RecipeListScreen}
@@ -25,18 +49,18 @@ export function RootNavigator() {
         <Stack.Screen
           name="RecipeDetail"
           component={RecipeDetailScreen}
-          options={{ title: 'Receta' }}
+          options={{ title: '', headerTransparent: true }}
         />
         <Stack.Screen
           name="CookMode"
           component={CookModeScreen}
-          options={{ title: 'Modo cocinar', headerBackTitle: 'Salir' }}
+          options={{ headerShown: false }}
         />
         {featureFlags.cameraIngredientDetection ? (
           <Stack.Screen
             name="IngredientCheck"
             component={IngredientCheckScreen}
-            options={{ title: 'Verificar ingredientes' }}
+            options={{ title: 'Verificar', headerTransparent: true, headerTintColor: '#fff' }}
           />
         ) : null}
         {featureFlags.voiceAssistant ? (

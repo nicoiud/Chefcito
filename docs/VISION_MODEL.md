@@ -153,3 +153,46 @@ entrega `expo-camera` a píxeles RGBA en el dispositivo, que necesita una
 librería nativa de imagen y por lo tanto solo se puede probar en un
 development build. `preprocessToTensor` ya cubre —y testea— la parte
 posterior: resize, separación de canales a NCHW y normalización.
+
+## Medición real de la detección (agosto 2026)
+
+Hasta acá la calidad del detector era una suposición. La medimos.
+
+**Cómo:** 63 fotos etiquetadas del set de validación de Open Images
+(Apple 13, Banana 18, Broccoli 13, Carrot 11, Orange 8), pasadas por el
+mismo modelo `yolov8n-coco-320-w8a32.tflite` que lleva la app. Se cuenta
+un acierto cuando la clase correcta aparece entre las detecciones.
+
+| Configuración | Aciertos | Recall | Falsos positivos |
+| --- | --- | --- | --- |
+| squash + umbral 0.50 (lo que había) | 43/63 | 68 % | 1 |
+| letterbox + umbral 0.50 | 48/63 | 76 % | 1 |
+| **letterbox + umbral 0.35 (actual)** | **49/63** | **78 %** | **1** |
+| letterbox + umbral 0.25 | 54/63 | 86 % | 3 |
+
+Dos conclusiones que cambiaron el código:
+
+1. **El preprocesado estaba mal.** Estirábamos la imagen a 320×320 sin
+   respetar el aspecto ("squash"), y el modelo fue entrenado con
+   letterbox (escala proporcional + relleno gris 114). Corregirlo dio
+   +8 puntos de recall sin tocar el modelo. Está en `src/vision/preprocess.ts`.
+2. **El umbral 0.5 era demasiado alto** para este modelo cuantizado a
+   INT8. Bajarlo a 0.35 suma un acierto sin sumar falsos positivos.
+   Bajar a 0.25 sumaría 5 aciertos más pero triplica los falsos
+   positivos, y un falso positivo en la cocina es peor que un miss:
+   el usuario siempre puede marcar el ingrediente a mano.
+
+Además se agregó **suavizado temporal** (`src/vision/temporalSmoothing.ts`):
+un ingrediente se muestra recién cuando aparece en 2 de los últimos 4
+cuadros. Sin eso la lista parpadeaba entre cuadros consecutivos.
+
+### Lo que esto NO arregla
+
+El modelo es COCO puro: reconoce **5 comidas** (manzana, banana,
+brócoli, zanahoria, naranja) más algunos utensilios. De los 55
+ingredientes del catálogo, los demás **no se detectan**, y varios
+importantes (cebolla, ajo) ni siquiera existen como clase etiquetable
+en Open Images. Por eso la app siempre ofrece marcar a mano, y por eso
+el fine-tuning de `ml/train.py` sigue siendo el paso que de verdad
+mueve la aguja. Las mejoras de acá son sobre esas 5 clases; el salto
+grande necesita entrenar.

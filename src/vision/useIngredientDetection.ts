@@ -10,6 +10,7 @@ import {
   type CorrectionsState,
 } from './corrections';
 import { loadCorrections, saveCorrections } from './correctionsStorage';
+import { TemporalSmoother } from './temporalSmoothing';
 import type { DetectedIngredient, DetectionFrame } from './types';
 
 /** Cada cuánto se corre inferencia sobre un frame nuevo. */
@@ -40,6 +41,9 @@ export function useIngredientDetection({
   enabled,
 }: UseIngredientDetectionOptions) {
   const detector = useMemo(() => getIngredientDetector(), []);
+  // Acumula evidencia entre cuadros: evita el parpadeo y permite sostener un
+  // umbral de confianza más bajo sin empezar a inventar detecciones.
+  const smoother = useMemo(() => new TemporalSmoother(), []);
   const [rawDetected, setRawDetected] = useState<DetectedIngredient[]>([]);
   const [corrections, setCorrections] = useState<CorrectionsState>(EMPTY_CORRECTIONS);
   const [manuallyConfirmed, setManuallyConfirmed] = useState<string[]>([]);
@@ -63,11 +67,12 @@ export function useIngredientDetection({
   useEffect(() => {
     setRawDetected([]);
     setManuallyConfirmed([]);
+    smoother.reset();
     if (detector instanceof SimulatedIngredientDetector) {
       detector.setExpectedIngredients(detectable);
     }
     // expectedKey identifica el conjunto sin recrear el array en cada render.
-  }, [detector, expectedKey]);
+  }, [detector, smoother, expectedKey]);
 
   const runDetection = useCallback(async () => {
     if (isDetectingRef.current) return;
@@ -75,14 +80,14 @@ export function useIngredientDetection({
     try {
       const frame = await captureFrameRef.current();
       if (!frame) return;
-      setRawDetected(await detector.detect(frame));
+      setRawDetected(smoother.push(await detector.detect(frame)));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al detectar ingredientes');
     } finally {
       isDetectingRef.current = false;
     }
-  }, [detector]);
+  }, [detector, smoother]);
 
   useEffect(() => {
     if (!enabled) return;

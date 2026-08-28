@@ -138,7 +138,8 @@ src/
   storage/     # persistencia local (favoritos vía AsyncStorage)
   navigation/  # stack de navegación
   screens/     # pantallas de las tres fases
-  components/  # componentes reutilizables (RecipeCard, StepTimer)
+  components/  # componentes reutilizables (ui.tsx, RecipeCard, StepTimer)
+  theme/       # tokens de diseño y tema claro/oscuro
   vision/      # Fase 2: detectores, catálogo de ingredientes, hook de cámara
   assistant/   # Fase 3: resolutor local, cupo diario, STT/TTS, cliente LLM
   ar/          # Fase 4: marcadores, proyección cenital, backend de AR
@@ -149,6 +150,7 @@ ml/            # Fase 2: entrenamiento y exportación del modelo de visión
 assets/models/ # el modelo .tflite que usa la app
 docs/
   ARCHITECTURE.md  # decisiones técnicas por fase
+  DISENO.md        # sistema de diseño: tokens, componentes y por qué
   VISION_MODEL.md  # qué reconoce el modelo, qué no, y cómo reentrenarlo
   AR.md            # por qué Viro y no Unity, y cómo está armada la guía
   TESTEO_MVP.md    # qué falta para probar todo en un celular real

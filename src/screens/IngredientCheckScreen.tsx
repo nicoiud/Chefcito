@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -9,10 +10,15 @@ import { useIngredientDetection } from '../vision/useIngredientDetection';
 import { frameToTensor } from '../vision/frameToTensor';
 import { IngredientPicker } from '../components/IngredientPicker';
 import type { DetectionFrame } from '../vision/types';
+import { useTheme } from '../theme/ThemeContext';
+import { radius, space } from '../theme/tokens';
+import { Boton, Columna, Etiqueta, Fila, Progreso, Txt } from '../components/ui';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'IngredientCheck'>;
 
 export function IngredientCheckScreen({ route }: Props) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { recipeId, stepIndex } = route.params;
   const recipe = recipes.find((r) => r.id === recipeId);
   const step = recipe?.steps[stepIndex];
@@ -21,9 +27,7 @@ export function IngredientCheckScreen({ route }: Props) {
   const isCameraReady = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
   const needsPixels = getIngredientDetector().requiresPixels;
-
-  /** Etiqueta cruda que se está corrigiendo, o null si el picker está cerrado. */
-  const [correcting, setCorrecting] = useState<{ rawLabel: string; shown: string } | null>(
+  const [corrigiendo, setCorrigiendo] = useState<{ rawLabel: string; shown: string } | null>(
     null
   );
 
@@ -41,12 +45,8 @@ export function IngredientCheckScreen({ route }: Props) {
       height: picture.height,
     };
 
-    // El tensor solo se calcula si hay un modelo que lo vaya a consumir:
-    // convertir la imagen cuesta tiempo y el detector simulado no lo usa.
-    if (needsPixels) {
-      frame.pixels = await frameToTensor(picture.uri);
-    }
-
+    // El tensor solo se calcula si hay un modelo que lo vaya a consumir.
+    if (needsPixels) frame.pixels = await frameToTensor(picture.uri);
     return frame;
   }, [needsPixels]);
 
@@ -67,214 +67,237 @@ export function IngredientCheckScreen({ route }: Props) {
 
   if (!recipe || !step) {
     return (
-      <View style={styles.center}>
-        <Text>No se encontró el paso de la receta.</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Txt>No se encontró el paso.</Txt>
       </View>
     );
   }
 
   if (!permission) {
     return (
-      <View style={styles.center}>
-        <Text>Verificando permisos de cámara…</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Txt color={theme.color.textoSuave}>Verificando permisos…</Txt>
       </View>
     );
   }
 
   if (!permission.granted) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.permissionTitle}>Necesitamos la cámara</Text>
-        <Text style={styles.permissionText}>
-          Chefcito usa la cámara para reconocer los ingredientes del paso. Las imágenes se
-          procesan en tu celular y no se envían a ningún servidor.
-        </Text>
-        <Pressable style={styles.primaryButton} onPress={requestPermission}>
-          <Text style={styles.primaryButtonText}>Permitir cámara</Text>
-        </Pressable>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          padding: space.xl,
+          backgroundColor: theme.color.fondo,
+        }}
+      >
+        <Columna gap={space.lg}>
+          <Txt style={{ fontSize: 44, lineHeight: 52 }}>📷</Txt>
+          <Txt variant="titulo">Necesitamos la cámara</Txt>
+          <Txt variant="cuerpo" color={theme.color.textoSuave}>
+            Sirve para reconocer los ingredientes del paso. Las imágenes se procesan en tu
+            celular y no se envían a ningún lado.
+          </Txt>
+          <Boton full onPress={requestPermission}>
+            Permitir cámara
+          </Boton>
+        </Columna>
       </View>
     );
   }
 
-  /** Detecciones que no forman parte del paso: candidatas a estar mal. */
-  const unexpected = detected.filter((d) => match.extra.includes(d.ingredientId));
+  const total = match.matched.length + match.missing.length;
+  const listo = match.isComplete;
+  const inesperados = detected.filter((d) => match.extra.includes(d.ingredientId));
 
-  /**
-   * Nombre a mostrar. Se prefiere el de la receta porque los ingredientes
-   * que no están en el catálogo (sal, aceite, caldo) no tienen nombre
-   * legible ahí y se verían como el id crudo.
-   */
-  const nameOf = (id: string) =>
+  const nombreDe = (id: string) =>
     recipe.ingredients.find((i) => i.id === id)?.name ?? getDisplayName(id);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.cameraWrapper}>
+    <View style={{ flex: 1, backgroundColor: theme.color.fondo }}>
+      <View style={{ height: '46%', backgroundColor: '#000' }}>
         <CameraView
           ref={cameraRef}
-          style={styles.camera}
+          style={{ flex: 1 }}
           facing="back"
           onCameraReady={() => {
             isCameraReady.current = true;
           }}
         />
-        {match.isComplete ? (
-          <View style={styles.completeBanner}>
-            <Text style={styles.completeBannerText}>✅ Todo listo para este paso</Text>
-          </View>
-        ) : null}
+
+        {/* Marco de encuadre: le dice al usuario dónde apuntar sin texto. */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: insets.top + 56,
+            left: space.xl,
+            right: space.xl,
+            bottom: 84,
+            borderWidth: 2,
+            borderColor: listo ? theme.color.exito : 'rgba(255,255,255,0.5)',
+            borderRadius: radius.lg,
+            borderStyle: 'dashed',
+          }}
+        />
+
+        {/* Estado sobre la cámara, con velo para que se lea sobre cualquier imagen. */}
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            paddingHorizontal: space.lg,
+            paddingVertical: space.md,
+            backgroundColor: theme.color.veloCamara,
+          }}
+        >
+          <Columna gap={space.sm}>
+            <Fila justify="space-between">
+              <Txt variant="chicoFuerte" color="#FFFFFF">
+                {listo
+                  ? '✓ Todo listo para este paso'
+                  : `${match.matched.length} de ${total} ingredientes`}
+              </Txt>
+              <Txt variant="chico" color="rgba(255,255,255,0.7)">
+                Paso {step.order}
+              </Txt>
+            </Fila>
+            {total > 0 ? <Progreso valor={match.matched.length / total} /> : null}
+          </Columna>
+        </View>
       </View>
 
-      <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
-        <Text style={styles.stepLabel}>Paso {step.order}</Text>
-        <Text style={styles.stepText}>{step.instruction}</Text>
+      <ScrollView
+        contentContainerStyle={{
+          padding: space.lg,
+          paddingBottom: insets.bottom + space.xxl,
+          gap: space.lg,
+        }}
+      >
+        <Txt variant="cuerpoFuerte">{step.instruction}</Txt>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <Text style={styles.sectionTitle}>Ingredientes del paso</Text>
-        {match.matched.length === 0 && match.missing.length === 0 ? (
-          <Text style={styles.mutedText}>Este paso no requiere ingredientes nuevos.</Text>
+        {error ? (
+          <Txt variant="chico" color={theme.color.peligro}>
+            {error}
+          </Txt>
         ) : null}
 
-        {match.matched.map((id) => {
-          const manual = manuallyConfirmed.includes(id);
-          return (
-            <Pressable
-              key={id}
-              style={styles.row}
-              onPress={() => (manual ? undoManualConfirmation(id) : undefined)}
-            >
-              <Text style={styles.rowIcon}>{manual ? '✋' : '✅'}</Text>
-              <Text style={styles.rowTextFound}>{nameOf(id)}</Text>
-              {manual ? <Text style={styles.rowHint}>marcado por vos · tocá para deshacer</Text> : null}
-            </Pressable>
-          );
-        })}
+        {total > 0 ? (
+          <Columna gap={space.sm}>
+            <Etiqueta>Ingredientes del paso</Etiqueta>
 
-        {match.missing.map((id) => (
-          <Pressable key={id} style={styles.row} onPress={() => confirmManually(id)}>
-            <Text style={styles.rowIcon}>⬜</Text>
-            <Text style={styles.rowTextMissing}>{nameOf(id)}</Text>
-            <Text style={styles.rowAction}>Ya lo tengo</Text>
-          </Pressable>
-        ))}
+            {match.matched.map((id) => {
+              const aMano = manuallyConfirmed.includes(id);
+              return (
+                <Pressable
+                  key={id}
+                  onPress={() => (aMano ? undoManualConfirmation(id) : undefined)}
+                  style={{
+                    backgroundColor: theme.color.exitoTenue,
+                    borderRadius: radius.md,
+                    padding: space.md,
+                  }}
+                >
+                  <Fila gap={space.md}>
+                    <Txt color={theme.color.exito}>{aMano ? '✋' : '✓'}</Txt>
+                    <Columna gap={0} style={{ flex: 1 }}>
+                      <Txt variant="cuerpoFuerte" color={theme.color.exito}>
+                        {nombreDe(id)}
+                      </Txt>
+                      {aMano ? (
+                        <Txt variant="chico" color={theme.color.textoSuave}>
+                          Lo marcaste vos · tocá para deshacer
+                        </Txt>
+                      ) : null}
+                    </Columna>
+                  </Fila>
+                </Pressable>
+              );
+            })}
 
-        {match.missing.length > 0 ? (
-          <Text style={styles.helpText}>
-            Si la cámara no lo reconoce, tocá el ingrediente para marcarlo vos.
-          </Text>
-        ) : null}
-
-        {unexpected.length > 0 ? (
-          <>
-            <Text style={styles.sectionTitle}>La cámara ve además</Text>
-            {unexpected.map((d) => (
+            {match.missing.map((id) => (
               <Pressable
-                key={d.ingredientId}
-                style={styles.row}
-                onPress={() =>
-                  setCorrecting({
-                    rawLabel: d.rawLabel,
-                    shown: nameOf(d.ingredientId),
-                  })
-                }
+                key={id}
+                onPress={() => confirmManually(id)}
+                style={{
+                  backgroundColor: theme.color.superficie,
+                  borderWidth: 1,
+                  borderColor: theme.color.borde,
+                  borderRadius: radius.md,
+                  padding: space.md,
+                }}
               >
-                <Text style={styles.rowIcon}>👁️</Text>
-                <Text style={styles.rowTextMissing}>{nameOf(d.ingredientId)}</Text>
-                <Text style={styles.rowAction}>No es eso</Text>
+                <Fila gap={space.md} justify="space-between">
+                  <Fila gap={space.md} style={{ flex: 1 }}>
+                    <Txt color={theme.color.textoTenue}>○</Txt>
+                    <Txt variant="cuerpo">{nombreDe(id)}</Txt>
+                  </Fila>
+                  <Txt variant="chicoFuerte" color={theme.color.acento}>
+                    Ya lo tengo
+                  </Txt>
+                </Fila>
               </Pressable>
             ))}
-            <Text style={styles.helpText}>
-              ¿Se equivocó? Tocá para decirle qué es en realidad. Lo va a recordar.
-            </Text>
-          </>
+
+            {match.missing.length > 0 ? (
+              <Txt variant="chico" color={theme.color.textoSuave}>
+                Si la cámara no lo reconoce, tocalo para marcarlo vos.
+              </Txt>
+            ) : null}
+          </Columna>
+        ) : (
+          <Txt variant="chico" color={theme.color.textoSuave}>
+            Este paso no requiere ingredientes nuevos.
+          </Txt>
+        )}
+
+        {inesperados.length > 0 ? (
+          <Columna gap={space.sm}>
+            <Etiqueta>La cámara ve además</Etiqueta>
+            {inesperados.map((d) => (
+              <Pressable
+                key={d.ingredientId}
+                onPress={() =>
+                  setCorrigiendo({ rawLabel: d.rawLabel, shown: nombreDe(d.ingredientId) })
+                }
+                style={{
+                  backgroundColor: theme.color.superficieHundida,
+                  borderRadius: radius.md,
+                  padding: space.md,
+                }}
+              >
+                <Fila justify="space-between">
+                  <Txt variant="cuerpo" color={theme.color.textoSuave}>
+                    {nombreDe(d.ingredientId)}
+                  </Txt>
+                  <Txt variant="chicoFuerte" color={theme.color.acento}>
+                    No es eso
+                  </Txt>
+                </Fila>
+              </Pressable>
+            ))}
+            <Txt variant="chico" color={theme.color.textoSuave}>
+              ¿Se equivocó? Decile qué es y no lo vuelve a confundir.
+            </Txt>
+          </Columna>
         ) : null}
 
-        <Text style={styles.detectorNote}>Motor de visión: {detectorName}</Text>
+        <Txt variant="chico" color={theme.color.textoTenue}>
+          Motor de visión: {detectorName}
+        </Txt>
       </ScrollView>
 
       <IngredientPicker
-        visible={correcting !== null}
-        title={`¿Qué es en realidad? (la cámara dijo "${correcting?.shown ?? ''}")`}
+        visible={corrigiendo !== null}
+        title={`¿Qué es en realidad? La cámara dijo "${corrigiendo?.shown ?? ''}"`}
         onSelect={(ingredientId) => {
-          if (correcting) correctDetection(correcting.rawLabel, ingredientId);
-          setCorrecting(null);
+          if (corrigiendo) correctDetection(corrigiendo.rawLabel, ingredientId);
+          setCorrigiendo(null);
         }}
-        onClose={() => setCorrecting(null)}
+        onClose={() => setCorrigiendo(null)}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  cameraWrapper: { height: '40%', backgroundColor: '#000' },
-  camera: { flex: 1 },
-  completeBanner: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(67, 160, 71, 0.92)',
-    alignItems: 'center',
-  },
-  completeBannerText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  panel: { flex: 1 },
-  panelContent: { padding: 20, paddingBottom: 32 },
-  stepLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#9E9E9E',
-    textTransform: 'uppercase',
-  },
-  stepText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#212121',
-    marginTop: 4,
-    lineHeight: 24,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#212121',
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
-  rowIcon: { fontSize: 15, width: 26 },
-  rowTextFound: { fontSize: 15, color: '#2E7D32', fontWeight: '600' },
-  rowTextMissing: { fontSize: 15, color: '#616161', flex: 1 },
-  rowAction: {
-    fontSize: 12,
-    color: '#FB8C00',
-    fontWeight: '700',
-    paddingHorizontal: 8,
-  },
-  rowHint: { fontSize: 10, color: '#9E9E9E', marginLeft: 8, flex: 1 },
-  helpText: { fontSize: 12, color: '#9E9E9E', marginTop: 6, lineHeight: 17 },
-  mutedText: { fontSize: 14, color: '#9E9E9E' },
-  error: { marginTop: 12, color: '#C62828', fontSize: 13 },
-  detectorNote: { marginTop: 24, fontSize: 11, color: '#BDBDBD' },
-  permissionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-    color: '#212121',
-  },
-  permissionText: {
-    textAlign: 'center',
-    color: '#616161',
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  primaryButton: {
-    backgroundColor: '#FB8C00',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-  },
-  primaryButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-});

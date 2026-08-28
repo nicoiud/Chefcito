@@ -5,326 +5,254 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { recipes } from '../data/recipes';
 import { useAssistant } from '../assistant/useAssistant';
 import { useSpeechToText } from '../assistant/useSpeechToText';
+import { useTheme } from '../theme/ThemeContext';
+import { radius, space } from '../theme/tokens';
+import { Columna, Fila, Progreso, Txt } from '../components/ui';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VoiceAssistant'>;
 
-const SUGGESTIONS = ['¿Qué ingredientes lleva?', '¿Cuál era el paso?', '¿Cuánto falta?'];
+const SUGERENCIAS = ['¿Qué ingredientes lleva?', '¿Cuál era el paso?', '¿Cuánto falta?'];
 
 export function VoiceAssistantScreen({ route }: Props) {
   const { recipeId, stepIndex } = route.params;
   const recipe = recipes.find((r) => r.id === recipeId);
-
-  const context = useMemo(
-    () => (recipe ? { recipe, stepIndex } : null),
-    [recipe, stepIndex]
-  );
+  const context = useMemo(() => (recipe ? { recipe, stepIndex } : null), [recipe, stepIndex]);
 
   if (!context) {
     return (
-      <View style={styles.center}>
-        <Text>No se encontró la receta.</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Txt>No se encontró la receta.</Txt>
       </View>
     );
   }
-
-  return <AssistantView context={context} />;
+  return <Asistente context={context} />;
 }
 
-function AssistantView({
+function Asistente({
   context,
 }: {
   context: { recipe: (typeof recipes)[number]; stepIndex: number };
 }) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { messages, ask, isLoading, error, remaining, limit } = useAssistant(context);
   const speech = useSpeechToText();
-  const [draft, setDraft] = useState('');
+  const [borrador, setBorrador] = useState('');
   const scrollRef = useRef<ScrollView | null>(null);
 
   useEffect(() => {
-    if (speech.transcript) setDraft(speech.transcript);
+    if (speech.transcript) setBorrador(speech.transcript);
   }, [speech.transcript]);
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
   }, [messages.length]);
 
-  const submit = (question: string) => {
-    ask(question);
-    setDraft('');
+  const enviar = (pregunta: string) => {
+    ask(pregunta);
+    setBorrador('');
     speech.clearTranscript();
   };
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={{ flex: 1, backgroundColor: theme.color.fondo }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={90}
     >
-      <View style={styles.quotaBar}>
-        <Text style={styles.quotaText}>
-          Te quedan {remaining} de {limit} preguntas hoy
-        </Text>
-        <Text style={styles.quotaHint}>Las preguntas sobre la receta no consumen cupo</Text>
+      {/* Cupo: se muestra como barra porque "cuánto me queda" se entiende
+          mejor viendo que leyendo un número. */}
+      <View
+        style={{
+          paddingHorizontal: space.lg,
+          paddingVertical: space.md,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.color.borde,
+        }}
+      >
+        <Columna gap={space.sm}>
+          <Fila justify="space-between">
+            <Txt variant="chicoFuerte">
+              {remaining} de {limit} preguntas abiertas
+            </Txt>
+            <Txt variant="chico" color={theme.color.textoSuave}>
+              se renueva mañana
+            </Txt>
+          </Fila>
+          <Progreso valor={remaining / limit} />
+          <Txt variant="chico" color={theme.color.textoSuave}>
+            Lo que está en la receta se responde sin gastar cupo.
+          </Txt>
+        </Columna>
       </View>
 
-      <ScrollView ref={scrollRef} style={styles.messages} contentContainerStyle={styles.messagesContent}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={{ padding: space.lg, gap: space.md, flexGrow: 1 }}
+      >
         {messages.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>Preguntame mientras cocinás 🎙️</Text>
-            <Text style={styles.emptyText}>
-              Podés preguntar por los ingredientes, repetir el paso actual o hacer una
-              consulta abierta de cocina.
-            </Text>
-            <View style={styles.suggestions}>
-              {SUGGESTIONS.map((suggestion) => (
+          <Columna gap={space.lg} style={{ marginTop: space.xl }}>
+            <Columna gap={space.sm}>
+              <Txt style={{ fontSize: 40, lineHeight: 48 }}>🎙</Txt>
+              <Txt variant="titulo">Preguntame mientras cocinás</Txt>
+              <Txt variant="cuerpo" color={theme.color.textoSuave}>
+                Podés preguntar por los ingredientes, repetir el paso, o hacer una consulta
+                abierta de cocina.
+              </Txt>
+            </Columna>
+            <Columna gap={space.sm}>
+              {SUGERENCIAS.map((s) => (
                 <Pressable
-                  key={suggestion}
-                  style={styles.suggestionChip}
-                  onPress={() => submit(suggestion)}
+                  key={s}
+                  onPress={() => enviar(s)}
+                  style={{
+                    backgroundColor: theme.color.superficie,
+                    borderWidth: 1,
+                    borderColor: theme.color.borde,
+                    borderRadius: radius.md,
+                    padding: space.md,
+                  }}
                 >
-                  <Text style={styles.suggestionText}>{suggestion}</Text>
+                  <Txt variant="cuerpo">{s}</Txt>
                 </Pressable>
               ))}
-            </View>
-          </View>
+            </Columna>
+          </Columna>
         ) : null}
 
-        {messages.map((message) => (
-          <View
-            key={message.id}
-            style={[
-              styles.bubble,
-              message.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant,
-            ]}
-          >
-            <Text
-              style={message.role === 'user' ? styles.bubbleTextUser : styles.bubbleTextAssistant}
+        {messages.map((m) => {
+          const mio = m.role === 'user';
+          return (
+            <View
+              key={m.id}
+              style={{
+                maxWidth: '88%',
+                alignSelf: mio ? 'flex-end' : 'flex-start',
+                backgroundColor: mio ? theme.color.acento : theme.color.superficie,
+                borderWidth: mio ? 0 : 1,
+                borderColor: theme.color.borde,
+                borderRadius: radius.lg,
+                borderBottomRightRadius: mio ? radius.sm : radius.lg,
+                borderBottomLeftRadius: mio ? radius.lg : radius.sm,
+                padding: space.md,
+              }}
             >
-              {message.text}
-            </Text>
-            {message.answeredLocally ? (
-              <Text style={styles.localBadge}>Respondido sin conexión · sin costo</Text>
-            ) : null}
-          </View>
-        ))}
+              <Txt variant="cuerpo" color={mio ? theme.color.textoSobreAcento : theme.color.texto}>
+                {m.text}
+              </Txt>
+              {m.answeredLocally ? (
+                <Txt variant="chico" color={theme.color.exito} style={{ marginTop: space.xs }}>
+                  Sin conexión · sin costo
+                </Txt>
+              ) : null}
+            </View>
+          );
+        })}
 
-        {isLoading ? <ActivityIndicator style={styles.loader} color="#FB8C00" /> : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {isLoading ? <ActivityIndicator color={theme.color.acento} /> : null}
+        {error ? (
+          <View
+            style={{
+              backgroundColor: theme.color.alertaTenue,
+              borderRadius: radius.md,
+              padding: space.md,
+            }}
+          >
+            <Txt variant="chico" color={theme.color.alerta}>
+              {error}
+            </Txt>
+          </View>
+        ) : null}
       </ScrollView>
 
-      <View style={styles.inputBar}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.sm,
+          padding: space.md,
+          paddingBottom: insets.bottom + space.md,
+          borderTopWidth: 1,
+          borderTopColor: theme.color.borde,
+          backgroundColor: theme.color.superficie,
+        }}
+      >
         {speech.isAvailable ? (
           <Pressable
-            style={[styles.micButton, speech.isListening && styles.micButtonActive]}
             onPressIn={speech.startListening}
             onPressOut={speech.stopListening}
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: radius.full,
+              backgroundColor: speech.isListening
+                ? theme.color.acento
+                : theme.color.superficieHundida,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
-            <Text style={styles.micIcon}>{speech.isListening ? '🔴' : '🎙️'}</Text>
+            <Txt style={{ fontSize: 18, lineHeight: 22 }}>🎙</Txt>
           </Pressable>
         ) : null}
 
         <TextInput
-          style={styles.input}
-          value={draft}
-          onChangeText={setDraft}
-          placeholder={
-            speech.isAvailable ? 'Mantené el micrófono o escribí…' : 'Escribí tu pregunta…'
-          }
-          placeholderTextColor="#BDBDBD"
-          onSubmitEditing={() => submit(draft)}
+          value={borrador}
+          onChangeText={setBorrador}
+          placeholder={speech.isAvailable ? 'Mantené el micrófono o escribí…' : 'Escribí tu pregunta…'}
+          placeholderTextColor={theme.color.textoTenue}
+          onSubmitEditing={() => enviar(borrador)}
           returnKeyType="send"
+          style={{
+            flex: 1,
+            height: 48,
+            borderRadius: radius.full,
+            backgroundColor: theme.color.superficieHundida,
+            paddingHorizontal: space.lg,
+            color: theme.color.texto,
+            fontFamily: 'Outfit-Regular',
+            fontSize: 16,
+          }}
         />
 
         <Pressable
-          style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]}
-          onPress={() => submit(draft)}
-          disabled={!draft.trim()}
+          onPress={() => enviar(borrador)}
+          disabled={!borrador.trim()}
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: radius.full,
+            backgroundColor: theme.color.acento,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: borrador.trim() ? 1 : 0.4,
+          }}
         >
-          <Text style={styles.sendButtonText}>Enviar</Text>
+          <Txt color={theme.color.textoSobreAcento} variant="cuerpoFuerte">
+            ↑
+          </Txt>
         </Pressable>
       </View>
 
       {!speech.isAvailable ? (
-        <Text style={styles.sttNote}>
-          El dictado por voz requiere un development build. Mientras tanto podés escribir.
-        </Text>
+        <Txt
+          variant="chico"
+          color={theme.color.textoTenue}
+          align="center"
+          style={{ paddingBottom: insets.bottom + space.sm, paddingHorizontal: space.lg }}
+        >
+          El dictado por voz necesita un development build. Por ahora, escribí.
+        </Txt>
       ) : null}
-      {speech.error ? <Text style={styles.error}>{speech.error}</Text> : null}
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FAFAFA',
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quotaBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#FFF3E0',
-    borderBottomWidth: 1,
-    borderBottomColor: '#FFE0B2',
-  },
-  quotaText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#E65100',
-  },
-  quotaHint: {
-    fontSize: 11,
-    color: '#EF6C00',
-    marginTop: 2,
-  },
-  messages: {
-    flex: 1,
-  },
-  messagesContent: {
-    padding: 16,
-    paddingBottom: 24,
-  },
-  emptyState: {
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#212121',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#757575',
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  suggestions: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  suggestionChip: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  suggestionText: {
-    fontSize: 13,
-    color: '#424242',
-  },
-  bubble: {
-    maxWidth: '85%',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: 10,
-  },
-  bubbleUser: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#FB8C00',
-  },
-  bubbleAssistant: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-  },
-  bubbleTextUser: {
-    color: '#fff',
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  bubbleTextAssistant: {
-    color: '#212121',
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  localBadge: {
-    marginTop: 6,
-    fontSize: 10,
-    color: '#2E7D32',
-    fontWeight: '600',
-  },
-  loader: {
-    marginTop: 8,
-  },
-  error: {
-    color: '#C62828',
-    fontSize: 13,
-    marginTop: 10,
-    paddingHorizontal: 16,
-  },
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
-    backgroundColor: '#fff',
-  },
-  micButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#F5F5F5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  micButtonActive: {
-    backgroundColor: '#FFCDD2',
-  },
-  micIcon: {
-    fontSize: 18,
-  },
-  input: {
-    flex: 1,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: '#212121',
-  },
-  sendButton: {
-    marginLeft: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 21,
-    backgroundColor: '#FB8C00',
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#FFCC80',
-  },
-  sendButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  sttNote: {
-    fontSize: 11,
-    color: '#9E9E9E',
-    textAlign: 'center',
-    paddingBottom: 10,
-    paddingHorizontal: 16,
-  },
-});

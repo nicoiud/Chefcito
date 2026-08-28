@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { recipes } from '../data/recipes';
@@ -8,10 +9,13 @@ import { projectToTopDown } from '../ar/topDownProjection';
 import { partitionExpectedIngredients } from '../vision/useIngredientDetection';
 import { ArErrorBoundary } from '../ar/ArErrorBoundary';
 import type { ArTrackingState } from '../ar/types';
+import { useTheme } from '../theme/ThemeContext';
+import { radius, space } from '../theme/tokens';
+import { Boton, Columna, Etiqueta, Fila, Txt } from '../components/ui';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ArGuide'>;
 
-const MARKER_SIZE = 76;
+const MARKER_SIZE = 84;
 
 /**
  * Carga la vista AR solo cuando el módulo nativo existe. El require es
@@ -26,13 +30,24 @@ function loadArSceneView(): React.ComponentType<any> | null {
   }
 }
 
-const TRACKING_MESSAGES: Record<ArTrackingState, string> = {
-  'buscando-superficie': 'Movés el celular despacio hasta que aparezca la mesada, y la tocás.',
-  anclado: 'Guía anclada. Los marcadores muestran dónde va cada ingrediente.',
-  perdido: 'Se perdió el seguimiento. Probá recalibrar apuntando a la mesada.',
+const MENSAJES: Record<ArTrackingState, { titulo: string; detalle: string }> = {
+  'buscando-superficie': {
+    titulo: 'Buscando la mesada',
+    detalle: 'Movés el celular despacio hasta que aparezca, y la tocás.',
+  },
+  anclado: {
+    titulo: 'Guía anclada',
+    detalle: 'Los marcadores muestran dónde va cada ingrediente.',
+  },
+  perdido: {
+    titulo: 'Se perdió el seguimiento',
+    detalle: 'Apuntá de nuevo a la mesada y tocá Recalibrar.',
+  },
 };
 
 export function ArGuideScreen({ route }: Props) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { recipeId, stepIndex } = route.params;
   const recipe = recipes.find((r) => r.id === recipeId);
   const step = recipe?.steps[stepIndex];
@@ -41,31 +56,27 @@ export function ArGuideScreen({ route }: Props) {
   const ArSceneView = useMemo(() => (arSession ? loadArSceneView() : null), [arSession]);
 
   const [area, setArea] = useState({ width: 0, height: 0 });
-  // Recalibrar remonta la escena AR (cambiando su key), lo que reinicia la
-  // selección de plano. La especificación lo pide porque el anclaje se
-  // desestabiliza en mesadas reflectantes o muy uniformes.
-  const [calibrations, setCalibrations] = useState(0);
+  const [calibraciones, setCalibraciones] = useState(0);
   const [tracking, setTracking] = useState<ArTrackingState>('buscando-superficie');
-  const [force2d, setForce2d] = useState(false);
-  // Si Viro falla al montarse, se guarda el motivo y la pantalla cae a 2D.
+  const [forzar2d, setForzar2d] = useState(false);
   const [arError, setArError] = useState<string | null>(null);
 
-  const expected = step?.ingredientIds ?? [];
-  const { detectable, notDetectable } = useMemo(
-    () => partitionExpectedIngredients(expected),
-    [expected]
+  const esperados = step?.ingredientIds ?? [];
+  const { notDetectable } = useMemo(
+    () => partitionExpectedIngredients(esperados),
+    [esperados]
   );
-  const markers = useMemo(() => buildMarkers(expected), [expected]);
+  const markers = useMemo(() => buildMarkers(esperados), [esperados]);
 
-  const projected = useMemo(
+  const proyectados = useMemo(
     () =>
       area.width > 0 && area.height > 0
         ? projectToTopDown(markers, {
             width: area.width,
             height: area.height,
-            // El marcador se dibuja centrado en su punto, así que el margen
-            // tiene que cubrir su radio o los laterales quedan cortados.
-            padding: MARKER_SIZE / 2 + 14,
+            // El marcador se dibuja centrado, así que el margen tiene que
+            // cubrir su radio o los laterales quedan cortados.
+            padding: MARKER_SIZE / 2 + 16,
           })
         : [],
     [markers, area]
@@ -73,265 +84,224 @@ export function ArGuideScreen({ route }: Props) {
 
   if (!recipe || !step) {
     return (
-      <View style={styles.center}>
-        <Text>No se encontró el paso de la receta.</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Txt>No se encontró el paso.</Txt>
       </View>
     );
   }
 
-  const recalibrate = () => {
-    setCalibrations((c) => c + 1);
+  const recalibrar = () => {
+    setCalibraciones((c) => c + 1);
     setTracking('buscando-superficie');
   };
 
-  const showAr = ArSceneView !== null && !force2d && arError === null;
+  const mostrarAr = ArSceneView !== null && !forzar2d && arError === null;
 
-  if (showAr) {
+  if (mostrarAr) {
+    const msg = MENSAJES[tracking];
     return (
-      <View style={styles.arContainer}>
+      <View style={{ flex: 1, backgroundColor: '#000' }}>
         <ArErrorBoundary onError={setArError}>
           <ArSceneView
-            key={`ar-${stepIndex}-${calibrations}`}
+            key={`ar-${stepIndex}-${calibraciones}`}
             markers={markers}
             onTrackingChange={setTracking}
           />
         </ArErrorBoundary>
 
-        <View style={styles.arOverlayTop} pointerEvents="none">
-          <Text style={styles.arStepLabel}>Paso {step.order}</Text>
-          <Text style={styles.arStepText} numberOfLines={3}>
-            {step.instruction}
-          </Text>
-          <Text style={styles.arTracking}>{TRACKING_MESSAGES[tracking]}</Text>
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            paddingTop: insets.top + 56,
+            paddingHorizontal: space.lg,
+            paddingBottom: space.lg,
+            backgroundColor: theme.color.veloCamara,
+          }}
+        >
+          <Columna gap={space.sm}>
+            <Txt variant="etiqueta" color="rgba(255,255,255,0.65)">
+              Paso {step.order}
+            </Txt>
+            <Txt variant="cuerpoFuerte" color="#FFFFFF" numberOfLines={3}>
+              {step.instruction}
+            </Txt>
+            <Fila gap={space.sm}>
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor:
+                    tracking === 'anclado' ? theme.color.exito : theme.color.alerta,
+                }}
+              />
+              <Txt variant="chico" color="#FFFFFF">
+                {msg.titulo}
+              </Txt>
+            </Fila>
+            <Txt variant="chico" color="rgba(255,255,255,0.7)">
+              {msg.detalle}
+            </Txt>
+          </Columna>
         </View>
 
-        <View style={styles.arOverlayBottom}>
-          <Pressable style={styles.arButton} onPress={recalibrate}>
-            <Text style={styles.arButtonText}>🎯 Recalibrar</Text>
-          </Pressable>
-          <Pressable style={styles.arButton} onPress={() => setForce2d(true)}>
-            <Text style={styles.arButtonText}>🗺️ Ver en 2D</Text>
-          </Pressable>
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: insets.bottom + space.lg,
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: space.md,
+            paddingHorizontal: space.lg,
+          }}
+        >
+          <Boton variant="secundario" onPress={recalibrar}>
+            Recalibrar
+          </Boton>
+          <Boton variant="secundario" onPress={() => setForzar2d(true)}>
+            Ver en 2D
+          </Boton>
         </View>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.stepLabel}>Paso {step.order}</Text>
-      <Text style={styles.stepText}>{step.instruction}</Text>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.color.fondo }}
+      contentContainerStyle={{
+        padding: space.lg,
+        paddingBottom: insets.bottom + space.xxl,
+        gap: space.lg,
+      }}
+    >
+      <Columna gap={space.sm}>
+        <Etiqueta>Paso {step.order}</Etiqueta>
+        <Txt variant="subtitulo">{step.instruction}</Txt>
+      </Columna>
 
-      <View style={styles.board} onLayout={(e: LayoutChangeEvent) => setArea(e.nativeEvent.layout)}>
-        <Text style={styles.boardHint}>Tu mesada, vista desde arriba</Text>
+      {/* Plano cenital: la misma disposición que se anclaría en AR. */}
+      <View
+        onLayout={(e: LayoutChangeEvent) => setArea(e.nativeEvent.layout)}
+        style={{
+          height: 340,
+          borderRadius: radius.lg,
+          backgroundColor: theme.color.superficieHundida,
+          borderWidth: 2,
+          borderColor: theme.color.borde,
+          borderStyle: 'dashed',
+          overflow: 'hidden',
+        }}
+      >
+        <Txt
+          variant="etiqueta"
+          color={theme.color.textoTenue}
+          align="center"
+          style={{ marginTop: space.md }}
+        >
+          Tu mesada, desde arriba
+        </Txt>
 
-        {projected.map((marker) => (
+        {proyectados.map((m) => (
           <View
-            key={marker.ingredientId}
-            style={[
-              styles.marker,
-              marker.state === 'confirmado' && styles.markerConfirmed,
-              {
-                left: marker.screen.x - MARKER_SIZE / 2,
-                top: marker.screen.y - MARKER_SIZE / 2,
-              },
-            ]}
+            key={m.ingredientId}
+            style={{
+              position: 'absolute',
+              left: m.screen.x - MARKER_SIZE / 2,
+              top: m.screen.y - MARKER_SIZE / 2,
+              width: MARKER_SIZE,
+              height: MARKER_SIZE,
+              borderRadius: MARKER_SIZE / 2,
+              backgroundColor:
+                m.state === 'confirmado' ? theme.color.exitoTenue : theme.color.acentoTenue,
+              borderWidth: 2,
+              borderColor: m.state === 'confirmado' ? theme.color.exito : theme.color.acento,
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: space.xs,
+            }}
           >
-            <Text style={styles.markerLabel} numberOfLines={2}>
-              {marker.label}
-            </Text>
+            <Txt
+              variant="chicoFuerte"
+              align="center"
+              numberOfLines={2}
+              color={m.state === 'confirmado' ? theme.color.exito : theme.color.acentoFuerte}
+            >
+              {m.label}
+            </Txt>
           </View>
         ))}
 
         {markers.length === 0 ? (
-          <Text style={styles.emptyBoard}>Este paso no necesita ingredientes nuevos.</Text>
+          <Txt
+            variant="chico"
+            color={theme.color.textoTenue}
+            align="center"
+            style={{ marginTop: 140 }}
+          >
+            Este paso no necesita ingredientes nuevos.
+          </Txt>
         ) : null}
 
-        <View style={styles.userMark}>
-          <Text style={styles.userMarkText}>vos</Text>
-        </View>
+        <Txt
+          variant="chico"
+          color={theme.color.textoTenue}
+          align="center"
+          style={{ position: 'absolute', bottom: space.md, left: 0, right: 0 }}
+        >
+          vos
+        </Txt>
       </View>
 
-      <Pressable style={styles.recalibrate} onPress={recalibrate}>
-        <Text style={styles.recalibrateText}>🎯 Recalibrar guía</Text>
-      </Pressable>
-      {calibrations > 0 ? (
-        <Text style={styles.recalibrateNote}>
-          Guía reanclada {calibrations} {calibrations === 1 ? 'vez' : 'veces'}.
-        </Text>
-      ) : null}
+      <Fila gap={space.md} justify="center" wrap>
+        <Boton variant="secundario" onPress={recalibrar}>
+          Recalibrar
+        </Boton>
+        {ArSceneView !== null && forzar2d ? (
+          <Boton onPress={() => setForzar2d(false)}>Volver a AR</Boton>
+        ) : null}
+      </Fila>
 
-      {ArSceneView !== null && force2d ? (
-        <Pressable style={styles.recalibrate} onPress={() => setForce2d(false)}>
-          <Text style={styles.recalibrateText}>📱 Volver a la vista AR</Text>
-        </Pressable>
-      ) : null}
-
-      {notDetectable.length > 0 ? (
-        <Text style={styles.note}>
-          {notDetectable.length === expected.length
-            ? 'Ninguno de los ingredientes de este paso se puede verificar con la cámara.'
-            : 'Algunos ingredientes de este paso no se verifican con la cámara.'}
-        </Text>
+      {calibraciones > 0 ? (
+        <Txt variant="chico" color={theme.color.textoSuave} align="center">
+          Guía reanclada {calibraciones} {calibraciones === 1 ? 'vez' : 'veces'}.
+        </Txt>
       ) : null}
 
       {arError ? (
-        <Text style={styles.arErrorNote}>
-          La vista AR no pudo iniciarse ({arError}). Te muestro la guía en 2D, que
-          tiene la misma información.
-        </Text>
+        <View
+          style={{
+            backgroundColor: theme.color.alertaTenue,
+            borderRadius: radius.md,
+            padding: space.md,
+          }}
+        >
+          <Txt variant="chico" color={theme.color.alerta}>
+            La vista AR no pudo iniciarse ({arError}). Te muestro la guía en 2D, que tiene la
+            misma información.
+          </Txt>
+        </View>
       ) : null}
 
-      <Text style={styles.engine}>
-        {arSession
-          ? `Motor AR disponible: ${arSession.name}`
-          : 'Sin AR en este dispositivo — mostrando la guía en 2D.'}
-      </Text>
-      {detectable.length > 0 ? (
-        <Text style={styles.engineSub}>
-          Con la cámara abierta, los ingredientes reconocidos se marcan en verde.
-        </Text>
+      {notDetectable.length > 0 ? (
+        <Txt variant="chico" color={theme.color.textoSuave}>
+          {notDetectable.length === esperados.length
+            ? 'Ninguno de estos ingredientes se verifica con la cámara.'
+            : 'Algunos de estos ingredientes no se verifican con la cámara.'}
+        </Txt>
       ) : null}
+
+      <Txt variant="chico" color={theme.color.textoTenue}>
+        {arSession
+          ? `Motor AR: ${arSession.name}`
+          : 'Sin AR en este dispositivo — mostrando la guía en 2D.'}
+      </Txt>
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  content: { padding: 20, paddingBottom: 32 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
-  arContainer: { flex: 1, backgroundColor: '#000' },
-  arOverlayTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  arStepLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFCC80',
-    textTransform: 'uppercase',
-  },
-  arStepText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginTop: 4,
-    lineHeight: 22,
-  },
-  arTracking: { fontSize: 12, color: '#E0E0E0', marginTop: 8, lineHeight: 17 },
-  arOverlayBottom: {
-    position: 'absolute',
-    bottom: 24,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  arButton: {
-    marginHorizontal: 6,
-    paddingVertical: 11,
-    paddingHorizontal: 18,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-  },
-  arButtonText: { color: '#E65100', fontWeight: '700', fontSize: 14 },
-
-  stepLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#9E9E9E',
-    textTransform: 'uppercase',
-  },
-  stepText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#212121',
-    marginTop: 4,
-    lineHeight: 24,
-  },
-  board: {
-    height: 320,
-    marginTop: 20,
-    borderRadius: 16,
-    backgroundColor: '#ECEFF1',
-    borderWidth: 2,
-    borderColor: '#CFD8DC',
-    borderStyle: 'dashed',
-    overflow: 'hidden',
-  },
-  boardHint: {
-    position: 'absolute',
-    top: 8,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontSize: 11,
-    color: '#90A4AE',
-  },
-  emptyBoard: {
-    position: 'absolute',
-    top: '45%',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    color: '#90A4AE',
-    fontSize: 13,
-  },
-  marker: {
-    position: 'absolute',
-    width: MARKER_SIZE,
-    height: MARKER_SIZE,
-    borderRadius: MARKER_SIZE / 2,
-    backgroundColor: '#FFE0B2',
-    borderWidth: 2,
-    borderColor: '#FB8C00',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 4,
-  },
-  markerConfirmed: { backgroundColor: '#C8E6C9', borderColor: '#43A047' },
-  markerLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#424242',
-    textAlign: 'center',
-  },
-  userMark: {
-    position: 'absolute',
-    bottom: 8,
-    alignSelf: 'center',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  userMarkText: { fontSize: 10, color: '#90A4AE', fontWeight: '600' },
-  recalibrate: {
-    marginTop: 16,
-    alignSelf: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    backgroundColor: '#FFF3E0',
-  },
-  recalibrateText: { color: '#E65100', fontWeight: '700', fontSize: 14 },
-  recalibrateNote: {
-    textAlign: 'center',
-    fontSize: 11,
-    color: '#9E9E9E',
-    marginTop: 6,
-  },
-  note: { marginTop: 16, fontSize: 12, color: '#757575', lineHeight: 18 },
-  arErrorNote: {
-    marginTop: 16,
-    fontSize: 12,
-    color: '#EF6C00',
-    lineHeight: 18,
-  },
-  engine: { marginTop: 20, fontSize: 11, color: '#BDBDBD' },
-  engineSub: { marginTop: 4, fontSize: 11, color: '#BDBDBD' },
-});

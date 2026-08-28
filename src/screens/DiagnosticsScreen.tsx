@@ -1,150 +1,135 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { NativeModules } from 'react-native';
+import { NativeModules, Platform, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getIngredientDetector } from '../vision';
 import { getModelCoveredIngredients } from '../vision/tfliteDetector';
+import { getDisplayName } from '../vision/ingredientCatalog';
 import { getArSession } from '../ar';
 import { featureFlags } from '../config/featureFlags';
 import { isAssistantBackendConfigured, ASSISTANT_API_URL } from '../config/env';
-import { getDisplayName } from '../vision/ingredientCatalog';
+import { useTheme } from '../theme/ThemeContext';
+import { radius, space } from '../theme/tokens';
+import { Chip, Columna, Etiqueta, Fila, Txt } from '../components/ui';
 
 /**
  * Pantalla de diagnóstico.
  *
  * Existe para poder depurar en un dispositivo real sin cable ni logcat: dice
- * qué módulos nativos encontró la app y qué motor está usando cada fase.
- * Cuando algo no anda, una captura de esta pantalla suele alcanzar para
- * saber si falta un módulo, si el modelo no cargó o si el problema es otro.
+ * qué módulos nativos encontró la app y qué motor usa cada fase. Cuando algo
+ * no anda, una captura de acá suele alcanzar.
  */
-
-interface Row {
+interface FilaDiag {
   label: string;
-  value: string;
+  valor: string;
   ok: boolean | null;
 }
 
-function useDiagnostics(): Row[] {
-  const [rows, setRows] = useState<Row[]>([]);
+function useDiagnostico(): FilaDiag[] {
+  const [filas, setFilas] = useState<FilaDiag[]>([]);
 
   useEffect(() => {
     const detector = getIngredientDetector();
     const ar = getArSession();
-    const usingRealModel = detector.requiresPixels;
+    const modeloReal = detector.requiresPixels;
 
-    setRows([
-      { label: 'Plataforma', value: `${Platform.OS} ${Platform.Version}`, ok: null },
-      {
-        label: 'Motor de visión',
-        value: detector.name,
-        ok: usingRealModel,
-      },
+    setFilas([
+      { label: 'Plataforma', valor: `${Platform.OS} ${Platform.Version}`, ok: null },
+      { label: 'Motor de visión', valor: detector.name, ok: modeloReal },
       {
         label: 'Runtime TFLite nativo',
-        value: NativeModules.Tflite || (global as any).__loadTensorflowModel
-          ? 'presente'
-          : 'ausente (detector simulado)',
-        ok: usingRealModel,
+        valor: modeloReal ? 'presente' : 'ausente (detector simulado)',
+        ok: modeloReal,
       },
       {
         label: 'Módulo nativo de Viro',
-        value: NativeModules.VRTARSceneNavigatorModule ? 'presente' : 'ausente (guía 2D)',
+        valor: NativeModules.VRTARSceneNavigatorModule ? 'presente' : 'ausente (guía 2D)',
         ok: Boolean(NativeModules.VRTARSceneNavigatorModule),
       },
-      {
-        label: 'Motor AR',
-        value: ar ? ar.name : 'no disponible',
-        ok: ar !== null,
-      },
+      { label: 'Motor AR', valor: ar ? ar.name : 'no disponible', ok: ar !== null },
       {
         label: 'Backend del asistente',
-        value: isAssistantBackendConfigured() ? ASSISTANT_API_URL : 'sin configurar',
+        valor: isAssistantBackendConfigured() ? ASSISTANT_API_URL : 'sin configurar',
         ok: isAssistantBackendConfigured(),
       },
       {
         label: 'Flags activos',
-        value: Object.entries(featureFlags)
+        valor: Object.entries(featureFlags)
           .filter(([, on]) => on)
-          .map(([name]) => name)
+          .map(([n]) => n)
           .join(', '),
         ok: null,
       },
       {
         label: 'Ingredientes que cubre el modelo',
-        value: getModelCoveredIngredients().map(getDisplayName).join(', '),
+        valor: getModelCoveredIngredients().map(getDisplayName).join(', '),
         ok: null,
       },
     ]);
   }, []);
 
-  return rows;
+  return filas;
 }
 
 export function DiagnosticsScreen() {
-  const rows = useDiagnostics();
-  const [copied, setCopied] = useState(false);
-
-  const asText = rows.map((r) => `${r.label}: ${r.value}`).join('\n');
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const filas = useDiagnostico();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.intro}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.color.fondo }}
+      contentContainerStyle={{
+        padding: space.lg,
+        paddingBottom: insets.bottom + space.xxl,
+        gap: space.md,
+      }}
+    >
+      <Txt variant="cuerpo" color={theme.color.textoSuave}>
         Si algo no funciona en el celular, sacá una captura de esta pantalla: dice qué
         módulos nativos encontró la app.
-      </Text>
+      </Txt>
 
-      {rows.map((row) => (
-        <View key={row.label} style={styles.row}>
-          <Text style={styles.rowLabel}>{row.label}</Text>
-          <View style={styles.rowValueBox}>
-            {row.ok !== null ? (
-              <Text style={styles.rowIcon}>{row.ok ? '✅' : '⚠️'}</Text>
+      {filas.map((f) => (
+        <View
+          key={f.label}
+          style={{
+            backgroundColor: theme.color.superficie,
+            borderWidth: 1,
+            borderColor: theme.color.borde,
+            borderRadius: radius.md,
+            padding: space.md,
+            gap: space.xs,
+          }}
+        >
+          <Fila justify="space-between" align="center">
+            <Etiqueta>{f.label}</Etiqueta>
+            {f.ok !== null ? (
+              <Chip tono={f.ok ? 'exito' : 'alerta'}>{f.ok ? 'OK' : 'falta'}</Chip>
             ) : null}
-            <Text style={[styles.rowValue, row.ok === false && styles.rowValueWarn]}>
-              {row.value || '—'}
-            </Text>
-          </View>
+          </Fila>
+          <Txt
+            variant="cuerpo"
+            color={f.ok === false ? theme.color.alerta : theme.color.texto}
+          >
+            {f.valor || '—'}
+          </Txt>
         </View>
       ))}
 
-      <Pressable style={styles.copyBox} onPress={() => setCopied(true)}>
-        <Text style={styles.copyTitle}>
-          {copied ? 'Texto para copiar 👇' : 'Ver como texto plano'}
-        </Text>
-        {copied ? <Text selectable style={styles.copyText}>{asText}</Text> : null}
-      </Pressable>
+      <Columna gap={space.sm} style={{ marginTop: space.md }}>
+        <Etiqueta>Como texto</Etiqueta>
+        <View
+          style={{
+            backgroundColor: theme.color.superficieHundida,
+            borderRadius: radius.md,
+            padding: space.md,
+          }}
+        >
+          <Txt variant="chico" color={theme.color.textoSuave} style={{ lineHeight: 19 }}>
+            {filas.map((f) => `${f.label}: ${f.valor}`).join('\n')}
+          </Txt>
+        </View>
+      </Columna>
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  content: { padding: 20, paddingBottom: 40 },
-  intro: { fontSize: 13, color: '#616161', lineHeight: 19, marginBottom: 20 },
-  row: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-  },
-  rowLabel: { fontSize: 11, color: '#9E9E9E', fontWeight: '700', textTransform: 'uppercase' },
-  rowValueBox: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 4 },
-  rowIcon: { fontSize: 13, marginRight: 6 },
-  rowValue: { fontSize: 14, color: '#212121', flex: 1 },
-  rowValueWarn: { color: '#EF6C00' },
-  copyBox: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#ECEFF1',
-  },
-  copyTitle: { fontSize: 13, fontWeight: '700', color: '#455A64' },
-  copyText: {
-    marginTop: 10,
-    fontSize: 11,
-    color: '#37474F',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    lineHeight: 16,
-  },
-});
