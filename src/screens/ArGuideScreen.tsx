@@ -6,6 +6,7 @@ import { recipes } from '../data/recipes';
 import { buildMarkers, getArSession } from '../ar';
 import { projectToTopDown } from '../ar/topDownProjection';
 import { partitionExpectedIngredients } from '../vision/useIngredientDetection';
+import { ArErrorBoundary } from '../ar/ArErrorBoundary';
 import type { ArTrackingState } from '../ar/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ArGuide'>;
@@ -46,6 +47,8 @@ export function ArGuideScreen({ route }: Props) {
   const [calibrations, setCalibrations] = useState(0);
   const [tracking, setTracking] = useState<ArTrackingState>('buscando-superficie');
   const [force2d, setForce2d] = useState(false);
+  // Si Viro falla al montarse, se guarda el motivo y la pantalla cae a 2D.
+  const [arError, setArError] = useState<string | null>(null);
 
   const expected = step?.ingredientIds ?? [];
   const { detectable, notDetectable } = useMemo(
@@ -81,16 +84,18 @@ export function ArGuideScreen({ route }: Props) {
     setTracking('buscando-superficie');
   };
 
-  const showAr = ArSceneView !== null && !force2d;
+  const showAr = ArSceneView !== null && !force2d && arError === null;
 
   if (showAr) {
     return (
       <View style={styles.arContainer}>
-        <ArSceneView
-          key={`ar-${stepIndex}-${calibrations}`}
-          markers={markers}
-          onTrackingChange={setTracking}
-        />
+        <ArErrorBoundary onError={setArError}>
+          <ArSceneView
+            key={`ar-${stepIndex}-${calibrations}`}
+            markers={markers}
+            onTrackingChange={setTracking}
+          />
+        </ArErrorBoundary>
 
         <View style={styles.arOverlayTop} pointerEvents="none">
           <Text style={styles.arStepLabel}>Paso {step.order}</Text>
@@ -167,6 +172,13 @@ export function ArGuideScreen({ route }: Props) {
           {notDetectable.length === expected.length
             ? 'Ninguno de los ingredientes de este paso se puede verificar con la cámara.'
             : 'Algunos ingredientes de este paso no se verifican con la cámara.'}
+        </Text>
+      ) : null}
+
+      {arError ? (
+        <Text style={styles.arErrorNote}>
+          La vista AR no pudo iniciarse ({arError}). Te muestro la guía en 2D, que
+          tiene la misma información.
         </Text>
       ) : null}
 
@@ -314,6 +326,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   note: { marginTop: 16, fontSize: 12, color: '#757575', lineHeight: 18 },
+  arErrorNote: {
+    marginTop: 16,
+    fontSize: 12,
+    color: '#EF6C00',
+    lineHeight: 18,
+  },
   engine: { marginTop: 20, fontSize: 11, color: '#BDBDBD' },
   engineSub: { marginTop: 4, fontSize: 11, color: '#BDBDBD' },
 });
