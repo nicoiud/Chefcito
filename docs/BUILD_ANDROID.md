@@ -16,6 +16,39 @@ arreglemos —lógica de detección, umbrales, posiciones de marcadores,
 textos— es JavaScript: lo cambiás sin compilar de nuevo. Solo hace falta
 un APK nuevo si tocamos dependencias nativas o `app.json`.
 
+## Desde cero en Windows
+
+Si es la primera vez, en orden:
+
+1. **Node.js.** Bajá la versión LTS de [nodejs.org](https://nodejs.org) e
+   instalala con las opciones por defecto. Para comprobar, abrí PowerShell
+   y escribí `node --version`: tiene que decir v20 o superior.
+2. **Git.** De [git-scm.com](https://git-scm.com/download/win), también con
+   las opciones por defecto.
+3. **Bajar el código.** En PowerShell:
+
+   ```powershell
+   cd C:\proyectos
+   git clone https://github.com/nicoiud/Chefcito.git
+   cd Chefcito
+   git checkout claude/cocina-ar-spec-qej0ib
+   npm install
+   ```
+
+   `npm install` tarda unos minutos la primera vez.
+4. **Cuenta de Expo.** Creala gratis en [expo.dev](https://expo.dev), y
+   después:
+
+   ```powershell
+   npm install -g eas-cli
+   eas login
+   ```
+5. **Compilar.** `.\scripts\bajar-apk.ps1`
+
+La primera compilación te va a preguntar si crea el proyecto en tu cuenta
+y si genera el keystore de firma. **Respondé que sí a todo** — el keystore
+queda guardado en tu cuenta de Expo y se reusa en los builds siguientes.
+
 ## Camino recomendado: EAS Build (en la nube)
 
 No necesitás instalar Android Studio ni el SDK.

@@ -46,8 +46,12 @@ if (-not (Get-Command eas -ErrorAction SilentlyContinue)) {
 
 if (-not $SoloBajar) {
   Paso "Compilando en EAS (perfil: $Perfil). Esto tarda ~20 minutos."
-  Write-Host "   Podés cerrar la ventana: el build sigue en los servidores de Expo." -ForegroundColor DarkGray
-  eas build --platform android --profile $Perfil --non-interactive --wait
+  Write-Host "   La primera vez te va a preguntar si crea el proyecto y el" -ForegroundColor DarkGray
+  Write-Host "   keystore de firma: respondé que si a todo." -ForegroundColor DarkGray
+  # Sin --non-interactive a propósito: la primera vez EAS necesita
+  # preguntar para crear el proyecto y generar el keystore de firma, y en
+  # modo no interactivo eso falla en vez de preguntar.
+  eas build --platform android --profile $Perfil --wait
   if ($LASTEXITCODE -ne 0) { Cortar "El build de EAS falló. Revisá el log que imprimió arriba." }
 }
 
