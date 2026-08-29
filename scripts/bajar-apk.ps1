@@ -81,6 +81,14 @@ $fecha = Get-Date -Format 'yyyy-MM-dd-HHmm'
 $archivo = Join-Path $Destino "chefcito-$Perfil-$fecha.apk"
 
 Paso "Bajando el APK a $archivo"
+# Windows PowerShell 5.1 puede arrancar negociando TLS 1.0, que los
+# servidores de artefactos ya no aceptan. En PowerShell 7 esto no hace
+# falta, pero tampoco molesta.
+try {
+  [Net.ServicePointManager]::SecurityProtocol =
+    [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+} catch { }
+
 $progresoPrevio = $ProgressPreference
 $ProgressPreference = 'SilentlyContinue'   # sin esto Invoke-WebRequest va lentísimo
 try {

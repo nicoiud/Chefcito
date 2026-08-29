@@ -43,7 +43,17 @@ Si es la primera vez, en orden:
    npm install -g eas-cli
    eas login
    ```
-5. **Compilar.** `.\scripts\bajar-apk.ps1`
+5. **Compilar.** Desde PowerShell:
+
+   ```powershell
+   .\scripts\bajar-apk.ps1
+   ```
+
+   Desde `cmd` (la consola negra clásica), el `.\` no funciona; usá:
+
+   ```
+   npm run apk
+   ```
 
 La primera compilación te va a preguntar si crea el proyecto en tu cuenta
 y si genera el keystore de firma. **Respondé que sí a todo** — el keystore
