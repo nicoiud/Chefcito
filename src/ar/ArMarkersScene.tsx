@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ViroARPlaneSelector,
   ViroARScene,
   ViroAmbientLight,
+  ViroARTrackingReasonConstants,
   ViroMaterials,
   ViroNode,
   ViroQuad,
@@ -11,7 +12,7 @@ import {
   type ViroTrackingReason,
   type ViroTrackingState,
 } from '@reactvision/react-viro';
-import type { IngredientMarker } from './types';
+import type { ArTrackingState, IngredientMarker } from './types';
 
 /**
  * Escena AR: marcadores anclados sobre la mesada real.
@@ -30,20 +31,27 @@ import type { IngredientMarker } from './types';
  */
 
 ViroMaterials.createMaterials({
-  chefcitoPendiente: { diffuseColor: '#FB8C00' },
-  chefcitoConfirmado: { diffuseColor: '#43A047' },
+  // Mismos colores que el sistema de diseño: el marcador en AR y el de la
+  // guía 2D tienen que verse como la misma cosa.
+  chefcitoPendiente: { diffuseColor: '#E2551E' },
+  chefcitoConfirmado: { diffuseColor: '#2F7D4F' },
 });
+
+/**
+ * Un plano recién detectado por ARCore arranca chico y va creciendo a
+ * medida que el usuario mueve el celular. Con un mínimo alto, los primeros
+ * segundos se descartan todos los planos y no aparece nada para tocar: el
+ * usuario cree que no funciona. 12 cm entra en cualquier mesada y deja
+ * afuera el ruido.
+ */
+const MIN_LADO_PLANO = 0.12;
 
 export interface ArMarkersSceneProps {
   markers: IngredientMarker[];
-  onTrackingChange?: (state: 'buscando-superficie' | 'anclado' | 'perdido') => void;
+  onTrackingChange?: (state: ArTrackingState) => void;
   onPlaneSelected?: () => void;
 }
 
-/**
- * Viro instancia la escena por sí mismo y le pasa `sceneNavigator.viroAppProps`,
- * así que los datos llegan por ahí y no por props directas.
- */
 export function ArMarkersScene(
   // Viro tipa la escena como `() => Element` pero en runtime le inyecta
   // `sceneNavigator`. El valor por defecto hace compatibles ambas firmas.
@@ -52,26 +60,56 @@ export function ArMarkersScene(
   const appProps = props.sceneNavigator?.viroAppProps;
   const markers = appProps?.markers ?? [];
   const [anchored, setAnchored] = useState(false);
+  // Ref y no estado: lo lee `onTrackingUpdated`, que Viro llama seguido, y
+  // no hace falta redibujar la escena por esto.
+  const hayPlano = useRef(false);
 
-  const onTrackingUpdated = (state: ViroTrackingState, _reason: ViroTrackingReason) => {
+  const onTrackingUpdated = (state: ViroTrackingState, reason: ViroTrackingReason) => {
     if (state === ViroTrackingStateConstants.TRACKING_NORMAL) {
-      appProps?.onTrackingChange?.(anchored ? 'anclado' : 'buscando-superficie');
+      if (anchored) appProps?.onTrackingChange?.('anclado');
+      else if (hayPlano.current) appProps?.onTrackingChange?.('superficie-lista');
+      else appProps?.onTrackingChange?.('buscando-superficie');
+      return;
+    }
+
+    // El motivo importa: cada uno se arregla con una acción distinta del
+    // usuario, y decirle "se perdió el seguimiento" no le sirve de nada.
+    if (reason === ViroARTrackingReasonConstants.TRACKING_REASON_INSUFFICIENT_FEATURES) {
+      appProps?.onTrackingChange?.('poca-textura');
+    } else if (reason === ViroARTrackingReasonConstants.TRACKING_REASON_EXCESSIVE_MOTION) {
+      appProps?.onTrackingChange?.('mucho-movimiento');
     } else {
-      // LIMITED o UNAVAILABLE: la pantalla ofrece recalibrar.
       appProps?.onTrackingChange?.('perdido');
     }
   };
 
   return (
-    <ViroARScene onTrackingUpdated={onTrackingUpdated}>
+    <ViroARScene
+      onTrackingUpdated={onTrackingUpdated}
+      // Explícito a propósito: sin esto dependemos del default del motor
+      // para que ARCore busque planos, que es justamente lo único que esta
+      // pantalla necesita.
+      anchorDetectionTypes={['PlanesHorizontal']}
+    >
       <ViroAmbientLight color="#FFFFFF" intensity={220} />
 
       <ViroARPlaneSelector
         // Solo mesadas y mesas: no tiene sentido anclar en una pared.
         alignment="HorizontalUpward"
-        // Descarta superficies demasiado chicas para apoyar ingredientes.
-        minWidth={0.25}
-        minHeight={0.25}
+        minWidth={MIN_LADO_PLANO}
+        minHeight={MIN_LADO_PLANO}
+        onPlaneDetected={() => {
+          // Avisa apenas hay algo para tocar, así el cartel deja de decir
+          // "buscando" cuando en realidad ya encontró.
+          if (!hayPlano.current) {
+            hayPlano.current = true;
+            if (!anchored) appProps?.onTrackingChange?.('superficie-lista');
+          }
+          return true;
+        }}
+        onPlaneRemoved={() => {
+          hayPlano.current = false;
+        }}
         onPlaneSelected={() => {
           setAnchored(true);
           appProps?.onPlaneSelected?.();

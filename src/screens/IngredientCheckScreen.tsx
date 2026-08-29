@@ -36,6 +36,9 @@ export function IngredientCheckScreen({ route }: Props) {
     const picture = await cameraRef.current.takePictureAsync({
       quality: 0.4,
       skipProcessing: true,
+      // Esto es una vista previa que se analiza, no una foto que el usuario
+      // pidió: sin obturador y sin sonido.
+      shutterSound: false,
     });
     if (!picture) return null;
 
@@ -120,6 +123,7 @@ export function IngredientCheckScreen({ route }: Props) {
           ref={cameraRef}
           style={{ flex: 1 }}
           facing="back"
+          animateShutter={false}
           onCameraReady={() => {
             isCameraReady.current = true;
           }}

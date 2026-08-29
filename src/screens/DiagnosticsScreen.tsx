@@ -24,6 +24,36 @@ interface FilaDiag {
   ok: boolean | null;
 }
 
+/**
+ * ARCore se consulta aparte porque la respuesta es asíncrona: dice si el
+ * celular soporta AR de verdad, no solo si la librería está compilada.
+ */
+function useSoporteAr(): string {
+  const [texto, setTexto] = useState('consultando…');
+
+  useEffect(() => {
+    let vigente = true;
+    (async () => {
+      try {
+        const viro = require('@reactvision/react-viro');
+        if (typeof viro.isARSupportedOnDevice !== 'function') {
+          if (vigente) setTexto('no disponible en este build');
+          return;
+        }
+        const r = await viro.isARSupportedOnDevice();
+        if (vigente) setTexto(r?.isARSupported ? 'soportado' : 'no soportado por el dispositivo');
+      } catch (e) {
+        if (vigente) setTexto(`error: ${String(e)}`);
+      }
+    })();
+    return () => {
+      vigente = false;
+    };
+  }, []);
+
+  return texto;
+}
+
 function useDiagnostico(): FilaDiag[] {
   const [filas, setFilas] = useState<FilaDiag[]>([]);
 
@@ -73,7 +103,15 @@ function useDiagnostico(): FilaDiag[] {
 export function DiagnosticsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const filas = useDiagnostico();
+  const base = useDiagnostico();
+  const soporteAr = useSoporteAr();
+
+  // Se inserta justo debajo del motor de AR, que es donde se lo busca.
+  const filas: FilaDiag[] = base.flatMap((f) =>
+    f.label === 'Motor AR'
+      ? [f, { label: 'ARCore en el dispositivo', valor: soporteAr, ok: soporteAr === 'soportado' }]
+      : [f]
+  );
 
   return (
     <ScrollView

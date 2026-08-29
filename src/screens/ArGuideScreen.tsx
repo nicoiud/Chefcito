@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,6 +8,7 @@ import { buildMarkers, getArSession } from '../ar';
 import { projectToTopDown } from '../ar/topDownProjection';
 import { partitionExpectedIngredients } from '../vision/useIngredientDetection';
 import { ArErrorBoundary } from '../ar/ArErrorBoundary';
+import { useArReadiness } from '../ar/useArReadiness';
 import type { ArTrackingState } from '../ar/types';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, space } from '../theme/tokens';
@@ -30,20 +31,49 @@ function loadArSceneView(): React.ComponentType<any> | null {
   }
 }
 
-const MENSAJES: Record<ArTrackingState, { titulo: string; detalle: string }> = {
+/**
+ * Un mensaje por estado, y cada uno dice qué hacer. "Se perdió el
+ * seguimiento" no le sirve a nadie: lo que hace falta es saber si hay que
+ * prender la luz, ir más despacio, o tocar la pantalla.
+ */
+export const MENSAJES: Record<ArTrackingState, { titulo: string; detalle: string; ok: boolean }> = {
   'buscando-superficie': {
     titulo: 'Buscando la mesada',
-    detalle: 'Movés el celular despacio hasta que aparezca, y la tocás.',
+    detalle: 'Apuntá a la mesada y movés el celular despacio, de lado a lado.',
+    ok: false,
+  },
+  'superficie-lista': {
+    titulo: 'Encontré una superficie',
+    detalle: 'Tocá la mesada en la pantalla para anclar la guía ahí.',
+    ok: true,
   },
   anclado: {
     titulo: 'Guía anclada',
     detalle: 'Los marcadores muestran dónde va cada ingrediente.',
+    ok: true,
+  },
+  'poca-textura': {
+    titulo: 'Falta luz o la mesada es muy lisa',
+    detalle: 'Prendé una luz, o apuntá a una zona con algo apoyado encima.',
+    ok: false,
+  },
+  'mucho-movimiento': {
+    titulo: 'Vas muy rápido',
+    detalle: 'Movés el celular más despacio para que pueda seguir el entorno.',
+    ok: false,
   },
   perdido: {
     titulo: 'Se perdió el seguimiento',
     detalle: 'Apuntá de nuevo a la mesada y tocá Recalibrar.',
+    ok: false,
   },
 };
+
+/**
+ * Si en este tiempo no se ancló nada, la pantalla ofrece la guía 2D en vez
+ * de dejar al usuario mirando una cámara que no reacciona.
+ */
+const SEGUNDOS_ANTES_DE_OFRECER_2D = 15;
 
 export function ArGuideScreen({ route }: Props) {
   const theme = useTheme();
@@ -60,6 +90,8 @@ export function ArGuideScreen({ route }: Props) {
   const [tracking, setTracking] = useState<ArTrackingState>('buscando-superficie');
   const [forzar2d, setForzar2d] = useState(false);
   const [arError, setArError] = useState<string | null>(null);
+  const [tardando, setTardando] = useState(false);
+  const { readiness, pedirPermiso } = useArReadiness();
 
   const esperados = step?.ingredientIds ?? [];
   const { notDetectable } = useMemo(
@@ -67,6 +99,17 @@ export function ArGuideScreen({ route }: Props) {
     [esperados]
   );
   const markers = useMemo(() => buildMarkers(esperados), [esperados]);
+
+  // Si después de un rato no ancló nada, la pantalla lo dice y ofrece la
+  // guía 2D. Antes se quedaba en "buscando" para siempre, sin salida.
+  useEffect(() => {
+    if (tracking === 'anclado') {
+      setTardando(false);
+      return;
+    }
+    const t = setTimeout(() => setTardando(true), SEGUNDOS_ANTES_DE_OFRECER_2D * 1000);
+    return () => clearTimeout(t);
+  }, [tracking, calibraciones]);
 
   const proyectados = useMemo(
     () =>
@@ -95,7 +138,38 @@ export function ArGuideScreen({ route }: Props) {
     setTracking('buscando-superficie');
   };
 
-  const mostrarAr = ArSceneView !== null && !forzar2d && arError === null;
+  const mostrarAr =
+    ArSceneView !== null && !forzar2d && arError === null && readiness === 'listo';
+
+  // Sin permiso de cámara ARCore no recibe imagen y no detecta nada nunca.
+  // Antes se montaba igual y el usuario veía una pantalla negra eterna.
+  if (ArSceneView !== null && !forzar2d && arError === null && readiness === 'sin-permiso') {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          padding: space.xl,
+          backgroundColor: theme.color.fondo,
+        }}
+      >
+        <Columna gap={space.lg}>
+          <Txt style={{ fontSize: 44, lineHeight: 52 }}>📐</Txt>
+          <Txt variant="titulo">La guía necesita la cámara</Txt>
+          <Txt variant="cuerpo" color={theme.color.textoSuave}>
+            La realidad aumentada apoya los marcadores sobre tu mesada, y para eso tiene que
+            verla. Las imágenes se procesan en tu celular.
+          </Txt>
+          <Boton full onPress={pedirPermiso}>
+            Permitir cámara
+          </Boton>
+          <Boton variant="fantasma" full onPress={() => setForzar2d(true)}>
+            Ver la guía en 2D
+          </Boton>
+        </Columna>
+      </View>
+    );
+  }
 
   if (mostrarAr) {
     const msg = MENSAJES[tracking];
@@ -135,8 +209,7 @@ export function ArGuideScreen({ route }: Props) {
                   width: 8,
                   height: 8,
                   borderRadius: 4,
-                  backgroundColor:
-                    tracking === 'anclado' ? theme.color.exito : theme.color.alerta,
+                  backgroundColor: msg.ok ? theme.color.exito : theme.color.alerta,
                 }}
               />
               <Txt variant="chico" color="#FFFFFF">
@@ -146,6 +219,12 @@ export function ArGuideScreen({ route }: Props) {
             <Txt variant="chico" color="rgba(255,255,255,0.7)">
               {msg.detalle}
             </Txt>
+            {tardando && tracking !== 'anclado' ? (
+              <Txt variant="chico" color="rgba(255,255,255,0.7)">
+                Si no aparece nada, tu celular puede no tener AR: tocá "Ver en 2D" y seguís
+                igual, con la misma información.
+              </Txt>
+            ) : null}
           </Columna>
         </View>
 
@@ -297,10 +376,15 @@ export function ArGuideScreen({ route }: Props) {
         </Txt>
       ) : null}
 
+      {/* Decir por qué no hay AR: "no anda" no le sirve a nadie. */}
       <Txt variant="chico" color={theme.color.textoTenue}>
-        {arSession
-          ? `Motor AR: ${arSession.name}`
-          : 'Sin AR en este dispositivo — mostrando la guía en 2D.'}
+        {!arSession
+          ? 'Este build no trae el módulo de AR — mostrando la guía en 2D.'
+          : readiness === 'sin-soporte'
+            ? 'Tu celular no tiene ARCore (o falta instalar "Servicios de Google Play para RA"), así que va la guía en 2D.'
+            : readiness === 'verificando'
+              ? 'Verificando si el dispositivo soporta AR…'
+              : `Motor AR: ${arSession.name}`}
       </Txt>
     </ScrollView>
   );

@@ -27,8 +27,14 @@ export interface IngredientMarker {
 export type ArTrackingState =
   /** Todavía no se detectó ninguna superficie. */
   | 'buscando-superficie'
+  /** Se detectó una superficie y falta que el usuario la toque. */
+  | 'superficie-lista'
   /** Hay superficie y los marcadores están anclados. */
   | 'anclado'
+  /** Hay poca luz o poca textura: ARCore no consigue puntos de referencia. */
+  | 'poca-textura'
+  /** El celular se mueve demasiado rápido para seguir el entorno. */
+  | 'mucho-movimiento'
   /** Se perdió el seguimiento: conviene ofrecer recalibrar. */
   | 'perdido';
 
