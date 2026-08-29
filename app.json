@@ -61,6 +61,11 @@
       ]
     ],
     "description": "Recetas paso a paso para cocinar sin perderte: modo cocinar con temporizador, favoritos y un asistente que te responde mientras tenés las manos ocupadas.",
-    "primaryColor": "#E2551E"
+    "primaryColor": "#E2551E",
+    "extra": {
+      "eas": {
+        "projectId": "ae02e63c-7e05-487e-80ca-f3bcffccda28"
+      }
+    }
   }
 }

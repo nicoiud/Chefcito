@@ -11,6 +11,12 @@ módulos nativos (TFLite y Viro). Hay que compilar un APK propio.
 | Necesita la compu prendida | Sí, corriendo Metro | No, corre solo |
 | Para qué sirve | **Iterar rápido mientras arreglamos cosas** | Probar como usuario final |
 
+**No uses `--profile production` para probar en el celular.** Ese perfil
+genera un `.aab`, que es el formato que pide Play Store y que Android **no
+puede instalar** desde el archivo. Sirve recién cuando publiquemos. Para
+probar en tu Samsung necesitás un `.apk`, que salen de `development` y de
+`preview`.
+
 **Para lo que vamos a hacer, usá `development`.** Casi todo lo que
 arreglemos —lógica de detección, umbrales, posiciones de marcadores,
 textos— es JavaScript: lo cambiás sin compilar de nuevo. Solo hace falta
