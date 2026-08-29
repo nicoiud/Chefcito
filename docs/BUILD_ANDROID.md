@@ -29,6 +29,36 @@ eas build --platform android --profile development
 Cuando termina te da un link para bajar el APK. Lo pasás al celular y lo
 instalás (hay que permitir "instalar apps de origen desconocido").
 
+### Que el APK caiga solo en `C:\proyectos\Chefcito`
+
+En Windows, en vez de compilar y bajar a mano:
+
+```powershell
+.\scripts\bajar-apk.ps1
+```
+
+Compila, espera, y deja el APK en `C:\proyectos\Chefcito` con un nombre
+fechado (`chefcito-development-2026-08-29-2044.apk`), así no se pisan las
+versiones entre una prueba y la siguiente. La carpeta se crea sola si no
+existe.
+
+```powershell
+.\scripts\bajar-apk.ps1 -SoloBajar          # no compila: baja el último build
+.\scripts\bajar-apk.ps1 -Perfil preview     # otro perfil
+.\scripts\bajar-apk.ps1 -Destino "D:\otra"  # otra carpeta
+```
+
+Si PowerShell se niega a correr el script, es la política de ejecución de
+Windows. Se resuelve por única vez con:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+**Por qué hace falta un script y no un flag:** `eas build --output` existe,
+pero es solo para builds locales. Los builds en la nube dejan el APK en un
+link, así que el script lo pide con `eas build:list --json` y lo baja.
+
 Después, para trabajar:
 
 ```bash
