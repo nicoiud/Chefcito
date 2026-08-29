@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -61,6 +61,6 @@
       ]
     ],
     "description": "Recetas paso a paso para cocinar sin perderte: modo cocinar con temporizador, favoritos y un asistente que te responde mientras tenés las manos ocupadas.",
-    "primaryColor": "#FB8C00"
+    "primaryColor": "#E2551E"
   }
 }

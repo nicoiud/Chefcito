@@ -3,6 +3,34 @@
 Todo el código está escrito. Lo que falta es **compilar y probar**, y eso
 requiere un dispositivo real que yo no tengo.
 
+## Qué está verificado y qué no
+
+Verificado acá, con comandos, no de memoria:
+
+- `npx expo prebuild --platform android` corre limpio: los tres config
+  plugins (cámara, voz, Viro) generan el proyecto Android sin conflicto.
+  El `AndroidManifest.xml` que sale pide CAMERA, RECORD_AUDIO y declara
+  `com.google.ar.core` como **optional**, así que la app instala igual en
+  celulares sin ARCore y cae a la guía 2D.
+- `npx expo export --platform android` arma el bundle completo, con el
+  modelo `.tflite` y las tipografías adentro.
+- `npx expo-doctor`: 19 de 21 checks. Los 2 que fallan son de red del
+  entorno donde trabajo (no alcanza los servidores de Expo), no del proyecto.
+- Backend en modo `demo`: responde y descuenta el cupo. 21 tests pasan.
+- App: typecheck limpio, 137 tests, y el flujo completo capturado en
+  claro y oscuro sin errores de consola.
+
+**No verificado, porque necesita tu celular:** que el APK compile hasta el
+final (el paso de Gradle corre en los servidores de EAS), que TFLite y
+Viro carguen sus módulos nativos, y que la AR ancle bien sobre la mesada.
+Ese es exactamente el trabajo de esta ronda de testeo.
+
+Un riesgo conocido: `expo-speech-recognition` va por la versión 56 y
+nosotros estamos en SDK 57 — todavía no publicaron la 57. El prebuild lo
+acepta sin quejarse, pero si el dictado por voz falla en el celular, es el
+primer sospechoso. La app no se rompe si pasa: la pantalla del asistente
+detecta que no está disponible y te deja escribir.
+
 ## Qué falta, exactamente
 
 | # | Qué | Quién | Cuánto |
