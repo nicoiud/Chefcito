@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Compila el APK de Chefcito en EAS y lo deja en C:\proyectos\Chefcito.
 
