@@ -7,6 +7,7 @@
     "@react-navigation/native": "^7.3.18",
     "@react-navigation/native-stack": "^7.18.10",
     "@reactvision/react-viro": "^2.58.1",
+    "@reactvision/react-viro-onnx": "^1.0.0",
     "expo": "~57.0.17",
     "expo-camera": "~57.0.4",
     "expo-crypto": "^57.0.2",
@@ -43,7 +44,8 @@
     "web": "expo start --web",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "apk": "powershell -ExecutionPolicy Bypass -File scripts/bajar-apk.ps1"
+    "apk": "powershell -ExecutionPolicy Bypass -File scripts/bajar-apk.ps1",
+    "clases": "node scripts/generar-clases-yoloe.js"
   },
   "private": true,
   "jest": {

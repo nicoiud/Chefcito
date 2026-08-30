@@ -1,120 +1,90 @@
-# Guía de mesada / AR (Fase 4)
+# Guía AR
 
-## La decisión: Viro en lugar de Unity
+## Qué hace
 
-La especificación proponía **Unity + AR Foundation**, dejando explícitamente
-abierta la evaluación al llegar a esta fase, entre (a) Unity embebido en la
-app React Native y (b) una app AR separada abierta por deep link.
+Reconoce los ingredientes del paso sobre la mesada y apoya un marcador
+sobre cada uno, en el lugar donde está de verdad.
 
-**Se descartaron las dos y se eligió [ViroReact](https://github.com/ReactVision/viro)**
-(`@reactvision/react-viro`), que usa ARKit en iOS y ARCore en Android — el
-mismo par de SDKs nativos que envuelve AR Foundation.
+**No hay paso de calibración.** Apuntás y aparecen. Esto es distinto de
+cómo estaba antes: hasta ahora había que encontrar un plano, tocarlo, y
+recién ahí aparecía un arco de marcadores calculado con trigonometría, que
+no tenía ninguna relación con dónde estaban tus ingredientes.
 
-### Por qué
-
-1. **El puente a Unity está abandonado.** La opción (a) depende de
-   `react-native-unity`, cuya última publicación es de **2022**. Embeber
-   Unity hoy significaría mantener nosotros ese puente contra versiones
-   nuevas de React Native.
-2. **Viro soporta nuestras versiones exactas.** Sus `peerDependencies`
-   declaran `expo >=55 <58` y `react-native >=0.83 <0.87`; el proyecto usa
-   Expo 57 y RN 0.86.3. Está publicado y mantenido al día.
-3. **Unity es desproporcionado para lo que hay que dibujar.** La propia
-   especificación dice que los marcadores son "formas geométricas + texto,
-   no requiere modelos 3D complejos". Unity agregaría más de 100 MB al
-   tamaño de la app y un segundo lenguaje y toolchain para eso.
-4. **La opción (b) rompería el modo verificación.** Una app AR separada no
-   puede compartir en vivo el estado de la detección de la Fase 2, y sacar
-   al usuario de la app a mitad de una receta es mala experiencia.
-
-### Si en el futuro se prefiere Unity
-
-El costo de cambiar está acotado a propósito: la app depende de la interfaz
-`ArSession` (`src/ar/types.ts`), no del motor. Toda la lógica de
-disposición de marcadores es independiente del backend y está testeada. Un
-adapter de Unity solo tendría que implementar esa interfaz.
-
-## Qué funciona hoy, y dónde
-
-La misma estrategia que en las fases anteriores: la función degrada en vez
-de romperse.
-
-| | Expo Go / web | Development build |
-|---|---|---|
-| Guía de mesada 2D (vista cenital) | ✅ funciona | ✅ funciona |
-| Recalibración manual | ✅ funciona | ✅ funciona |
-| Marcadores anclados sobre la cámara | ❌ cae a la guía 2D | ⏳ requiere integrar Viro |
-
-La **guía 2D no es una maqueta**: usa exactamente la misma disposición de
-marcadores que se anclaría en AR, proyectada desde arriba. Muestra dónde va
-cada ingrediente del paso, con la misma geometría y los mismos estados.
-Sirve como respaldo real donde no hay AR y como mini-mapa dentro de la
-vista AR.
-
-## Cómo está armado
+## Cómo funciona
 
 ```
-src/ar/
-  types.ts             # contrato ArSession, marcadores, estados de tracking
-  markerLayout.ts      # dónde va cada marcador (lógica pura)
-  topDownProjection.ts # proyección cenital a coordenadas de pantalla
-  viroSession.ts       # adapter de Viro, carga opcional
-  index.ts             # elige el backend disponible
+ViroObjectDetector (YOLOE sobre la cámara de la AR)
+        │  detección: etiqueta + caja en pantalla
+        ▼
+useDetectionAnchors
+        │  1. traduce la etiqueta al id del catálogo (+ correcciones del usuario)
+        │  2. filtra: solo los ingredientes de este paso
+        │  3. ¿se movió lo suficiente? → performARHitTestWithPoint(centro)
+        ▼
+DetectionAnchorStore
+        │  suaviza la posición, la recuerda unos segundos
+        ▼
+ArMarkersScene  → dibuja el marcador en esa posición del mundo
 ```
 
-### Sistema de coordenadas
+### La pieza clave: una sola cámara
 
-El estándar de ARKit/ARCore: **+x** a la derecha, **+y** hacia arriba,
-**−z** hacia adelante. El origen es el ancla, es decir el punto de la mesada
-que el usuario tocó para calibrar.
+En Android no se pueden abrir dos sesiones de cámara a la vez. Por eso esto
+**no** se puede hacer con una librería de cámara aparte corriendo en
+paralelo a la AR: `ViroObjectDetector` comparte el feed del
+`ViroARSceneNavigator` que lo contiene. Es la razón por la que el detector
+es de Viro y no de otro lado.
 
-### Disposición de los marcadores
+### De la caja 2D a la posición 3D
 
-Los ingredientes del paso se reparten en un **arco** de 35 cm de radio y
-100° de apertura frente al ancla — una distancia cómoda de alcanzar sobre
-una mesada. Si son más de cuatro, se abre un segundo arco 22 cm más lejos.
+El detector devuelve una caja en coordenadas de pantalla. `performARHitTestWithPoint(x, y)`
+dispara un rayo desde ese punto contra el mundo reconstruido por ARCore y
+devuelve dónde pega.
 
-Es lógica pura y testeada porque es donde se cuelan los errores que después
-son difíciles de diagnosticar: marcadores encimados, fuera de alcance, o
-detrás del usuario. Los tests cubren la simetría del arco, que ningún
-marcador quede a la espalda, que no se repitan posiciones y que el
-desborde a un segundo arco funcione.
+De los impactos que devuelve, no todos valen igual: un plano ya detectado
+es una superficie estable, un `FeaturePoint` es un punto suelto de la nube
+que baila con cada cuadro. `pickBestHit` los prioriza. Anclar en el primero
+de la lista es la diferencia entre un marcador quieto y uno que tiembla.
 
-En la proyección cenital hubo un error real que los tests atajaron: como
-"adelante" ya es **−z** en AR y "arriba" es **−y** en pantalla, invertir el
-eje otra vez dejaba los marcadores lejanos abajo. Los dos ejes ya apuntan
-en el mismo sentido.
+### Por qué no se reproyecta en cada cuadro
 
-### Modo verificación
+El hit test es asíncrono y cuesta. `DetectionAnchorStore` solo lo pide
+cuando la caja se movió más de 24 px; si no, reusa la posición anterior.
+Y cuando llega una posición nueva, la mezcla con la vieja (promedio
+exponencial) en vez de reemplazarla, para que el marcador no pegue saltos.
 
-`buildMarkers(esperados, detectados)` toma los ingredientes que la Fase 2
-reconoció y marca esos marcadores como confirmados (verde). Es lo que pide
-la especificación: combinar la guía con la detección para confirmar
-visualmente que el ingrediente está en el lugar correcto.
+Un ancla sobrevive 4 segundos sin volver a verse: tapar la cebolla con la
+mano no tiene que hacer desaparecer el marcador.
 
-### Recalibración manual
+## Estados y qué le decimos al usuario
 
-La especificación advierte que el anclaje puede volverse inestable en
-mesadas reflectantes o muy uniformes, y pide poder reanclar. El botón
-"Recalibrar guía" hace eso. Como las posiciones de los marcadores son
-**relativas al ancla**, recalibrar mueve el conjunto sin recalcular la
-disposición — hay un test que fija esa propiedad.
+Cada estado de seguimiento tiene un mensaje que dice **qué hacer**, no solo
+qué pasa. "Se perdió el seguimiento" no le sirve a nadie; "prendé una luz"
+o "movés más despacio" sí. Hay un test que exige que ningún estado quede
+sin mensaje accionable.
 
-## Lo que falta
+## Requisitos, y qué pasa si faltan
 
-1. **Integrar Viro de verdad.** Hoy `viroSession.ts` detecta si el módulo
-   está presente pero todavía no renderiza la escena AR. Falta montar el
-   `ViroARScene` con detección de plano, el hit-test para anclar al tocar y
-   los marcadores como geometría + texto.
-2. **Probar en condiciones reales**, que es lo que pide la especificación:
-   distintas luces, mesadas reflectantes, superficies de colores y texturas
-   variadas. Nada de esto se puede validar sin dispositivo.
+| Falta | Qué hace la app |
+| --- | --- |
+| Permiso de cámara | Lo pide, explicando para qué |
+| ARCore en el dispositivo | Lo dice y va a la guía 2D |
+| El módulo nativo (Expo Go) | Guía 2D |
+| El modelo .onnx | AR sin reconocimiento, avisa |
 
-```bash
-npx expo install @reactvision/react-viro
-npx expo prebuild
-npx expo run:android    # o run:ios
-```
+La guía 2D muestra una **disposición sugerida** en un plano cenital. No
+pretende ser lo que hay en tu mesada: es la misma información de otra
+forma, para que la app siga siendo útil sin AR.
 
-Requiere un dispositivo con ARCore (Android) o ARKit (iOS): los emuladores
-no sirven para probar AR.
+## Limitación conocida
+
+En Android la AR ve el **~55-60% central** del campo vertical. Lo que esté
+en los bordes no se detecta. Es del componente, no de nuestro código.
+
+## Por qué Viro y no Unity
+
+Unity habría significado un runtime aparte, licencia, y un pipeline de
+build separado para meter una escena 3D dentro de una app React Native. Viro
+es un set de componentes React que hablan con ARCore/ARKit directo, sin
+runtime extra. Y trae el detector de objetos integrado sobre la misma
+cámara, que es justo lo que esta app necesita.

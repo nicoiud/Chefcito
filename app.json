@@ -58,7 +58,9 @@
             "cameraUsagePermission": "Chefcito usa la cámara para mostrarte sobre la mesada dónde va cada ingrediente."
           }
         }
-      ]
+      ],
+      "@reactvision/react-viro-onnx",
+      "./plugins/withOnnxModel"
     ],
     "description": "Recetas paso a paso para cocinar sin perderte: modo cocinar con temporizador, favoritos y un asistente que te responde mientras tenés las manos ocupadas.",
     "primaryColor": "#E2551E",

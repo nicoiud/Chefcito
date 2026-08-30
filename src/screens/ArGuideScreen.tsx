@@ -5,10 +5,12 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { recipes } from '../data/recipes';
 import { buildMarkers, getArSession } from '../ar';
+import { getDisplayName } from '../vision/ingredientCatalog';
 import { projectToTopDown } from '../ar/topDownProjection';
 import { partitionExpectedIngredients } from '../vision/useIngredientDetection';
 import { ArErrorBoundary } from '../ar/ArErrorBoundary';
 import { useArReadiness } from '../ar/useArReadiness';
+import { useDetectionAnchors } from '../ar/useDetectionAnchors';
 import type { ArTrackingState } from '../ar/types';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, space } from '../theme/tokens';
@@ -38,18 +40,18 @@ function loadArSceneView(): React.ComponentType<any> | null {
  */
 export const MENSAJES: Record<ArTrackingState, { titulo: string; detalle: string; ok: boolean }> = {
   'buscando-superficie': {
-    titulo: 'Buscando la mesada',
+    titulo: 'Buscando los ingredientes',
     detalle: 'Apuntá a la mesada y movés el celular despacio, de lado a lado.',
     ok: false,
   },
   'superficie-lista': {
-    titulo: 'Encontré una superficie',
-    detalle: 'Tocá la mesada en la pantalla para anclar la guía ahí.',
+    titulo: 'Reconociendo la mesada',
+    detalle: 'Ya tengo la superficie. Apuntá a los ingredientes del paso.',
     ok: true,
   },
   anclado: {
-    titulo: 'Guía anclada',
-    detalle: 'Los marcadores muestran dónde va cada ingrediente.',
+    titulo: 'Ingredientes marcados',
+    detalle: 'Cada marcador está apoyado sobre lo que la cámara reconoció.',
     ok: true,
   },
   'poca-textura': {
@@ -64,7 +66,7 @@ export const MENSAJES: Record<ArTrackingState, { titulo: string; detalle: string
   },
   perdido: {
     titulo: 'Se perdió el seguimiento',
-    detalle: 'Apuntá de nuevo a la mesada y tocá Recalibrar.',
+    detalle: 'Apuntá de nuevo a la mesada, o tocá Reiniciar para empezar de cero.',
     ok: false,
   },
 };
@@ -98,7 +100,18 @@ export function ArGuideScreen({ route }: Props) {
     () => partitionExpectedIngredients(esperados),
     [esperados]
   );
-  const markers = useMemo(() => buildMarkers(esperados), [esperados]);
+  // El arco calculado sigue siendo la guía 2D: ahí no hay cámara que
+  // reconozca nada, así que se muestra una disposición sugerida.
+  const markersSugeridos = useMemo(() => buildMarkers(esperados), [esperados]);
+
+  // En AR, en cambio, los marcadores salen de lo que la cámara reconoce.
+  const {
+    markers: markersDetectados,
+    vistos,
+    onDetections,
+    onHitTestReady,
+  } = useDetectionAnchors(esperados);
+  const [detectorError, setDetectorError] = useState<string | null>(null);
 
   // Si después de un rato no ancló nada, la pantalla lo dice y ofrece la
   // guía 2D. Antes se quedaba en "buscando" para siempre, sin salida.
@@ -114,7 +127,7 @@ export function ArGuideScreen({ route }: Props) {
   const proyectados = useMemo(
     () =>
       area.width > 0 && area.height > 0
-        ? projectToTopDown(markers, {
+        ? projectToTopDown(markersSugeridos, {
             width: area.width,
             height: area.height,
             // El marcador se dibuja centrado, así que el margen tiene que
@@ -122,7 +135,7 @@ export function ArGuideScreen({ route }: Props) {
             padding: MARKER_SIZE / 2 + 16,
           })
         : [],
-    [markers, area]
+    [markersSugeridos, area]
   );
 
   if (!recipe || !step) {
@@ -132,6 +145,9 @@ export function ArGuideScreen({ route }: Props) {
       </View>
     );
   }
+
+  const nombreDe = (id: string) =>
+    recipe.ingredients.find((i) => i.id === id)?.name ?? getDisplayName(id);
 
   const recalibrar = () => {
     setCalibraciones((c) => c + 1);
@@ -178,8 +194,11 @@ export function ArGuideScreen({ route }: Props) {
         <ArErrorBoundary onError={setArError}>
           <ArSceneView
             key={`ar-${stepIndex}-${calibraciones}`}
-            markers={markers}
+            markers={markersDetectados}
             onTrackingChange={setTracking}
+            onHitTestReady={onHitTestReady}
+            onDetections={onDetections}
+            onDetectorError={setDetectorError}
           />
         </ArErrorBoundary>
 
@@ -219,11 +238,47 @@ export function ArGuideScreen({ route }: Props) {
             <Txt variant="chico" color="rgba(255,255,255,0.7)">
               {msg.detalle}
             </Txt>
-            {tardando && tracking !== 'anclado' ? (
+            {tardando && vistos.length === 0 ? (
               <Txt variant="chico" color="rgba(255,255,255,0.7)">
                 Si no aparece nada, tu celular puede no tener AR: tocá "Ver en 2D" y seguís
                 igual, con la misma información.
               </Txt>
+            ) : null}
+            {detectorError ? (
+              <Txt variant="chico" color={theme.color.alerta}>
+                El reconocimiento no arrancó ({detectorError}). La AR sigue andando, pero sin
+                marcar ingredientes.
+              </Txt>
+            ) : null}
+
+            {/* Qué falta y qué ya está, sobre la cámara: antes había que
+                salir a otra pantalla para saberlo. */}
+            {esperados.length > 0 ? (
+              <Fila gap={space.sm} wrap>
+                {esperados.map((id) => {
+                  const visto = vistos.includes(id);
+                  return (
+                    <View
+                      key={id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: space.xs,
+                        paddingHorizontal: space.md,
+                        paddingVertical: space.xs,
+                        borderRadius: radius.full,
+                        backgroundColor: visto
+                          ? theme.color.exito
+                          : 'rgba(255,255,255,0.16)',
+                      }}
+                    >
+                      <Txt variant="chicoFuerte" color="#FFFFFF">
+                        {visto ? '✓' : '○'} {nombreDe(id)}
+                      </Txt>
+                    </View>
+                  );
+                })}
+              </Fila>
             ) : null}
           </Columna>
         </View>
@@ -241,7 +296,7 @@ export function ArGuideScreen({ route }: Props) {
           }}
         >
           <Boton variant="secundario" onPress={recalibrar}>
-            Recalibrar
+            Reiniciar
           </Boton>
           <Boton variant="secundario" onPress={() => setForzar2d(true)}>
             Ver en 2D
@@ -284,7 +339,7 @@ export function ArGuideScreen({ route }: Props) {
           align="center"
           style={{ marginTop: space.md }}
         >
-          Tu mesada, desde arriba
+          Disposición sugerida
         </Txt>
 
         {proyectados.map((m) => (
@@ -317,7 +372,7 @@ export function ArGuideScreen({ route }: Props) {
           </View>
         ))}
 
-        {markers.length === 0 ? (
+        {markersSugeridos.length === 0 ? (
           <Txt
             variant="chico"
             color={theme.color.textoTenue}
@@ -338,19 +393,10 @@ export function ArGuideScreen({ route }: Props) {
         </Txt>
       </View>
 
-      <Fila gap={space.md} justify="center" wrap>
-        <Boton variant="secundario" onPress={recalibrar}>
-          Recalibrar
-        </Boton>
-        {ArSceneView !== null && forzar2d ? (
+      {ArSceneView !== null && forzar2d ? (
+        <Fila justify="center">
           <Boton onPress={() => setForzar2d(false)}>Volver a AR</Boton>
-        ) : null}
-      </Fila>
-
-      {calibraciones > 0 ? (
-        <Txt variant="chico" color={theme.color.textoSuave} align="center">
-          Guía reanclada {calibraciones} {calibraciones === 1 ? 'vez' : 'veces'}.
-        </Txt>
+        </Fila>
       ) : null}
 
       {arError ? (

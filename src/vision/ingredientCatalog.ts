@@ -128,6 +128,20 @@ export function getDisplayName(ingredientId: string): string {
   return entry ? entry.displayName : ingredientId;
 }
 
+/**
+ * Los nombres de clase en inglés, uno por ingrediente, para exportar el
+ * modelo YOLOE.
+ *
+ * YOLOE hornea las clases usando embeddings de texto de CLIP, que funciona
+ * mucho mejor en inglés. Por convención el primer alias de cada entrada es
+ * el nombre en inglés; hay un test que lo verifica, porque si alguien
+ * agrega un ingrediente con el alias en español primero, el modelo se
+ * exporta con una clase que CLIP entiende peor.
+ */
+export function getEnglishClassNames(): string[] {
+  return ingredientCatalog.map((entry) => entry.aliases[0]);
+}
+
 /** Todos los ingredientes del catálogo (el objetivo del modelo entrenado). */
 export function getSupportedIngredientIds(): string[] {
   return ingredientCatalog.map((entry) => entry.id);

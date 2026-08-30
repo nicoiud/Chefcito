@@ -1,3 +1,9 @@
+> **Este documento describe el camino anterior (YOLOv8n + TFLite).**
+> La app ahora reconoce ingredientes con YOLOE a través de Viro: ver
+> [`ml/README_YOLOE.md`](../ml/README_YOLOE.md) y [`AR.md`](AR.md).
+> Se conserva porque las mediciones de abajo son reales y explican por qué
+> se cambió de enfoque.
+
 # Modelo de visión (Fase 2)
 
 ## Qué se distribuye hoy

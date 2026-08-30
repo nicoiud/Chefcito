@@ -146,12 +146,13 @@ src/
   utils/       # lógica pura (matching de ingredientes)
   __tests__/   # tests unitarios
 backend/       # Fase 3: endpoint que controla el costo del LLM
-ml/            # Fase 2: entrenamiento y exportación del modelo de visión
+ml/            # exportación del modelo YOLOE (ver ml/README_YOLOE.md)
+plugins/       # config plugins de Expo (mete el modelo en el build nativo)
 assets/models/ # el modelo .tflite que usa la app
 docs/
   ARCHITECTURE.md  # decisiones técnicas por fase
   DISENO.md        # sistema de diseño: tokens, componentes y por qué
-  VISION_MODEL.md  # qué reconoce el modelo, qué no, y cómo reentrenarlo
+  VISION_MODEL.md  # el detector viejo (TFLite) y por qué se reemplazó
   AR.md            # por qué Viro y no Unity, y cómo está armada la guía
   TESTEO_MVP.md    # qué falta para probar todo en un celular real
   PRIVACIDAD.md    # política de privacidad (requisito de Play Store)
