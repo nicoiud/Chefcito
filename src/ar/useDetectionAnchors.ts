@@ -22,7 +22,20 @@ import type { IngredientMarker } from './types';
  * El paso 3 es asíncrono y es el caro: por eso el registro decide cuándo
  * vale la pena, en vez de pedirlo en cada cuadro.
  */
-export function useDetectionAnchors(expectedIngredientIds: string[]) {
+/** Cómo se rotula un ingrediente en el marcador. */
+export interface EtiquetaIngrediente {
+  label: string;
+  detail?: string;
+}
+
+export function useDetectionAnchors(
+  expectedIngredientIds: string[],
+  /**
+   * De dónde salen el nombre y la cantidad. La receta manda: dice "3
+   * unidades" y usa sus propios nombres ("Mozzarella" y no "queso").
+   */
+  describir?: (ingredientId: string) => EtiquetaIngrediente
+) {
   const store = useMemo(() => new DetectionAnchorStore(), []);
   const hitTestRef = useRef<HitTestFn | null>(null);
   // Las correcciones que el usuario hizo antes valen también acá: si dijo
@@ -58,18 +71,24 @@ export function useDetectionAnchors(expectedIngredientIds: string[]) {
     (ahora: number) => {
       const vigentes = store.vigentes(ahora);
       setMarkers(
-        vigentes.map((a) => ({
-          ingredientId: a.ingredientId,
-          label: getDisplayName(a.ingredientId),
-          position: a.position,
-          // Verlo con la cámara ES la confirmación: para eso existía el
-          // estado, y hasta ahora no se activaba nunca.
-          state: 'confirmado' as const,
-        }))
+        vigentes.map((a) => {
+          const etiqueta = describir?.(a.ingredientId) ?? {
+            label: getDisplayName(a.ingredientId),
+          };
+          return {
+            ingredientId: a.ingredientId,
+            label: etiqueta.label,
+            detail: etiqueta.detail,
+            position: a.position,
+            // Verlo con la cámara ES la confirmación: para eso existía el
+            // estado, y hasta ahora no se activaba nunca.
+            state: 'confirmado' as const,
+          };
+        })
       );
       setVistos(vigentes.map((a) => a.ingredientId));
     },
-    [store]
+    [describir, store]
   );
 
   const onDetections = useCallback(

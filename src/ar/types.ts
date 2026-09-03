@@ -20,6 +20,13 @@ export interface IngredientMarker {
   ingredientId: string;
   /** Texto que se muestra en el marcador. */
   label: string;
+  /**
+   * Segunda línea del marcador: la cantidad que pide la receta ("3
+   * unidades", "250 g"). Reconocer el ingrediente sin decir cuánto va deja
+   * la mitad del trabajo hecho — el usuario igual tiene que ir a leer la
+   * receta.
+   */
+  detail?: string;
   position: ArPosition;
   state: MarkerState;
 }

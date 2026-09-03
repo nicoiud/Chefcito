@@ -120,13 +120,26 @@ export function ArMarkersScene(
           />
           <ViroText
             text={marker.label}
-            position={[0, 0.06, 0]}
+            position={[0, 0.09, 0]}
             scale={[0.14, 0.14, 0.14]}
             style={{ fontSize: 26, color: '#FFFFFF', textAlign: 'center' }}
             outerStroke={{ type: 'Outline', width: 3, color: '#000000' }}
             // Que el texto siempre mire al usuario, se mueva por donde se mueva.
             transformBehaviors={['billboardY']}
           />
+
+          {/* La cantidad, más chica y debajo: reconocer el ingrediente sin
+              decir cuánto va deja al usuario yendo a buscar la receta. */}
+          {marker.detail ? (
+            <ViroText
+              text={marker.detail}
+              position={[0, 0.055, 0]}
+              scale={[0.14, 0.14, 0.14]}
+              style={{ fontSize: 19, color: '#FFD9C7', textAlign: 'center' }}
+              outerStroke={{ type: 'Outline', width: 3, color: '#000000' }}
+              transformBehaviors={['billboardY']}
+            />
+          ) : null}
         </ViroNode>
       ))}
     </ViroARScene>

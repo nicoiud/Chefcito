@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { recipes } from '../data/recipes';
 import { buildMarkers, getArSession } from '../ar';
-import { getDisplayName } from '../vision/ingredientCatalog';
+import { describirIngrediente } from '../ar/markerLabels';
 import { projectToTopDown } from '../ar/topDownProjection';
 import { partitionExpectedIngredients } from '../vision/useIngredientDetection';
 import { ArErrorBoundary } from '../ar/ArErrorBoundary';
@@ -105,12 +105,19 @@ export function ArGuideScreen({ route }: Props) {
   const markersSugeridos = useMemo(() => buildMarkers(esperados), [esperados]);
 
   // En AR, en cambio, los marcadores salen de lo que la cámara reconoce.
+  // La receta manda para el rótulo: usa sus propios nombres y es la única
+  // que sabe cuánto va de cada cosa.
+  const describir = useCallback(
+    (id: string) => describirIngrediente(id, recipe?.ingredients ?? []),
+    [recipe]
+  );
+
   const {
     markers: markersDetectados,
     vistos,
     onDetections,
     onHitTestReady,
-  } = useDetectionAnchors(esperados);
+  } = useDetectionAnchors(esperados, describir);
   const [detectorError, setDetectorError] = useState<string | null>(null);
 
   // Si después de un rato no ancló nada, la pantalla lo dice y ofrece la
@@ -146,8 +153,7 @@ export function ArGuideScreen({ route }: Props) {
     );
   }
 
-  const nombreDe = (id: string) =>
-    recipe.ingredients.find((i) => i.id === id)?.name ?? getDisplayName(id);
+  const nombreDe = (id: string) => describirIngrediente(id, recipe.ingredients).label;
 
   const recalibrar = () => {
     setCalibraciones((c) => c + 1);
