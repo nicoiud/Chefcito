@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { resolveIngredientId, getDisplayName } from '../vision/ingredientCatalog';
+import {
+  resolveIngredientId,
+  getDisplayName,
+  getSupportedIngredientIds,
+} from '../vision/ingredientCatalog';
 import { EMPTY_CORRECTIONS, applyCorrections, type CorrectionsState } from '../vision/corrections';
 import { loadCorrections } from '../vision/correctionsStorage';
 import { DetectionAnchorStore, boxCenter, pickBestHit } from './detectionAnchors';
 import type { Detection } from './detectionAnchors';
+import { LiveBoxTracker, type TrackedBox } from './liveDetections';
 import type { HitTestFn } from './ArMarkersScene';
 import type { IngredientMarker } from './types';
 
@@ -37,21 +42,28 @@ export function useDetectionAnchors(
   describir?: (ingredientId: string) => EtiquetaIngrediente
 ) {
   const store = useMemo(() => new DetectionAnchorStore(), []);
+  const tracker = useMemo(() => new LiveBoxTracker(), []);
+  const catalogo = useMemo(() => new Set(getSupportedIngredientIds()), []);
   const hitTestRef = useRef<HitTestFn | null>(null);
   // Las correcciones que el usuario hizo antes valen también acá: si dijo
   // que eso no era una manzana, no queremos volver a marcársela.
   const correcciones = useRef<CorrectionsState>(EMPTY_CORRECTIONS);
   const [markers, setMarkers] = useState<IngredientMarker[]>([]);
   const [vistos, setVistos] = useState<string[]>([]);
+  // Todo lo que la cámara reconoce, sea o no de este paso: se marca en
+  // pantalla al instante, sin esperar a que el hit test encuentre la mesada.
+  const [cajas, setCajas] = useState<TrackedBox[]>([]);
 
   const esperados = useMemo(() => new Set(expectedIngredientIds), [expectedIngredientIds]);
 
   // Al cambiar de paso, lo anclado deja de tener sentido.
   useEffect(() => {
     store.reset();
+    tracker.reset();
     setMarkers([]);
     setVistos([]);
-  }, [store, expectedIngredientIds]);
+    setCajas([]);
+  }, [store, tracker, expectedIngredientIds]);
 
   useEffect(() => {
     let vigente = true;
@@ -114,6 +126,14 @@ export function useDetectionAnchors(
       const idPorEtiqueta = new Map(corregidas.map((c) => [c.rawLabel, c.ingredientId]));
       const yaProcesados = new Set<string>();
 
+      // Las cajas en pantalla van primero y sin esperar a nadie: el hit
+      // test de abajo es asíncrono y no tiene por qué demorar lo que se ve.
+      const reconocidas = detections.flatMap((d) => {
+        const ingredientId = idPorEtiqueta.get(d.label);
+        return ingredientId && catalogo.has(ingredientId) ? [{ ...d, ingredientId }] : [];
+      });
+      setCajas(tracker.actualizar(reconocidas, ahora));
+
       for (let i = 0; i < detections.length; i++) {
         const ingredientId = idPorEtiqueta.get(detections[i].label);
         if (!ingredientId || !esperados.has(ingredientId)) continue;
@@ -138,7 +158,7 @@ export function useDetectionAnchors(
       store.purgar(ahora);
       redibujar(ahora);
     },
-    [esperados, redibujar, store]
+    [catalogo, esperados, redibujar, store, tracker]
   );
 
   // Un ingrediente que se dejó de ver tiene que desaparecer aunque no
@@ -146,8 +166,13 @@ export function useDetectionAnchors(
   // quedaría clavado en pantalla para siempre.
   useEffect(() => {
     const t = setInterval(() => redibujar(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [redibujar]);
+    // Lo mismo para las cajas, con un latido más corto porque viven menos.
+    const u = setInterval(() => setCajas(tracker.vigentes(Date.now())), 300);
+    return () => {
+      clearInterval(t);
+      clearInterval(u);
+    };
+  }, [redibujar, tracker]);
 
-  return { markers, vistos, onDetections, onHitTestReady };
+  return { markers, vistos, cajas, onDetections, onHitTestReady };
 }

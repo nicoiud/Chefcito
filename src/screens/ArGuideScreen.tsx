@@ -12,6 +12,10 @@ import { ArErrorBoundary } from '../ar/ArErrorBoundary';
 import { useArReadiness } from '../ar/useArReadiness';
 import { useDetectionAnchors } from '../ar/useDetectionAnchors';
 import type { ArTrackingState } from '../ar/types';
+import type { RecetaAr } from '../ar/ArMarkersScene';
+import { DetectionOverlay } from '../ar/DetectionOverlay';
+import { contarPorIngrediente } from '../ar/liveDetections';
+import { estimarPeso, formatearPeso } from '../vision/ingredientWeights';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, space } from '../theme/tokens';
 import { Boton, Columna, Etiqueta, Fila, Txt } from '../components/ui';
@@ -115,10 +119,21 @@ export function ArGuideScreen({ route }: Props) {
   const {
     markers: markersDetectados,
     vistos,
+    cajas,
     onDetections,
     onHitTestReady,
   } = useDetectionAnchors(esperados, describir);
   const [detectorError, setDetectorError] = useState<string | null>(null);
+  const [verReceta, setVerReceta] = useState(true);
+  const [recentrar, setRecentrar] = useState(0);
+
+  // "Visto" es lo anclado en 3D o lo que el detector está marcando ahora:
+  // esperar al hit test para tildar algo que ya se ve en pantalla confunde.
+  const cuentaCajas = useMemo(() => contarPorIngrediente(cajas), [cajas]);
+  const vistosAhora = useMemo(
+    () => new Set([...vistos, ...cuentaCajas.keys()]),
+    [vistos, cuentaCajas]
+  );
 
   // Si después de un rato no ancló nada, la pantalla lo dice y ofrece la
   // guía 2D. Antes se quedaba en "buscando" para siempre, sin salida.
@@ -195,12 +210,29 @@ export function ArGuideScreen({ route }: Props) {
 
   if (mostrarAr) {
     const msg = MENSAJES[tracking];
+    const receta: RecetaAr | null = verReceta
+      ? {
+          titulo: `${recipe.imageEmoji} ${recipe.title}`,
+          paso: `Paso ${step.order} de ${recipe.steps.length}`,
+          instruccion: step.instruction,
+          ingredientes: (esperados.length > 0
+            ? esperados
+            : recipe.ingredients.map((i) => i.id)
+          ).map((id) => {
+            const d = describir(id);
+            return { id, nombre: d.label, cantidad: d.detail, visto: vistosAhora.has(id) };
+          }),
+        }
+      : null;
+
     return (
       <View style={{ flex: 1, backgroundColor: '#000' }}>
         <ArErrorBoundary onError={setArError}>
           <ArSceneView
             key={`ar-${stepIndex}-${calibraciones}`}
             markers={markersDetectados}
+            receta={receta}
+            recentrarReceta={recentrar}
             onTrackingChange={setTracking}
             onHitTestReady={onHitTestReady}
             onDetections={onDetections}
@@ -208,85 +240,65 @@ export function ArGuideScreen({ route }: Props) {
           />
         </ArErrorBoundary>
 
+        {/* Visor: cada cosa que la cámara reconoce, marcada en el cuadro
+            en que la reconoce, con su peso estimado. */}
+        <DetectionOverlay cajas={cajas} esperados={esperados} describir={describir} />
+
+        {/* Estado arriba, chico: la cámara es la protagonista. Antes un
+            velo oscuro tapaba casi media pantalla. */}
         <View
           pointerEvents="none"
           style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            paddingTop: insets.top + 56,
-            paddingHorizontal: space.lg,
-            paddingBottom: space.lg,
-            backgroundColor: theme.color.veloCamara,
+            top: insets.top + 56,
+            left: space.lg,
+            right: space.lg,
+            alignItems: 'flex-start',
+            gap: space.xs,
           }}
         >
-          <Columna gap={space.sm}>
-            <Txt variant="etiqueta" color="rgba(255,255,255,0.65)">
-              Paso {step.order}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.sm,
+              paddingHorizontal: space.md,
+              paddingVertical: space.xs,
+              borderRadius: radius.full,
+              backgroundColor: 'rgba(0,0,0,0.55)',
+            }}
+          >
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: msg.ok ? theme.color.exito : theme.color.alerta,
+              }}
+            />
+            <Txt variant="chicoFuerte" color="#FFFFFF">
+              {cajas.length > 0
+                ? `${cajas.length} ${cajas.length === 1 ? 'cosa reconocida' : 'cosas reconocidas'}`
+                : msg.titulo}
             </Txt>
-            <Txt variant="cuerpoFuerte" color="#FFFFFF" numberOfLines={3}>
-              {step.instruction}
-            </Txt>
-            <Fila gap={space.sm}>
-              <View
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: msg.ok ? theme.color.exito : theme.color.alerta,
-                }}
-              />
-              <Txt variant="chico" color="#FFFFFF">
-                {msg.titulo}
+          </View>
+          {!msg.ok || (tardando && vistos.length === 0) || detectorError ? (
+            <View
+              style={{
+                padding: space.sm,
+                borderRadius: radius.md,
+                backgroundColor: 'rgba(0,0,0,0.55)',
+              }}
+            >
+              <Txt variant="chico" color="rgba(255,255,255,0.85)">
+                {detectorError
+                  ? `El reconocimiento no arrancó (${detectorError}). La AR sigue andando, pero sin marcar ingredientes.`
+                  : tardando && vistos.length === 0
+                    ? 'Si no aparece nada, tu celular puede no tener AR: tocá "Ver en 2D" y seguís igual.'
+                    : msg.detalle}
               </Txt>
-            </Fila>
-            <Txt variant="chico" color="rgba(255,255,255,0.7)">
-              {msg.detalle}
-            </Txt>
-            {tardando && vistos.length === 0 ? (
-              <Txt variant="chico" color="rgba(255,255,255,0.7)">
-                Si no aparece nada, tu celular puede no tener AR: tocá "Ver en 2D" y seguís
-                igual, con la misma información.
-              </Txt>
-            ) : null}
-            {detectorError ? (
-              <Txt variant="chico" color={theme.color.alerta}>
-                El reconocimiento no arrancó ({detectorError}). La AR sigue andando, pero sin
-                marcar ingredientes.
-              </Txt>
-            ) : null}
-
-            {/* Qué falta y qué ya está, sobre la cámara: antes había que
-                salir a otra pantalla para saberlo. */}
-            {esperados.length > 0 ? (
-              <Fila gap={space.sm} wrap>
-                {esperados.map((id) => {
-                  const visto = vistos.includes(id);
-                  return (
-                    <View
-                      key={id}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: space.xs,
-                        paddingHorizontal: space.md,
-                        paddingVertical: space.xs,
-                        borderRadius: radius.full,
-                        backgroundColor: visto
-                          ? theme.color.exito
-                          : 'rgba(255,255,255,0.16)',
-                      }}
-                    >
-                      <Txt variant="chicoFuerte" color="#FFFFFF">
-                        {visto ? '✓' : '○'} {nombreDe(id)}
-                      </Txt>
-                    </View>
-                  );
-                })}
-              </Fila>
-            ) : null}
-          </Columna>
+            </View>
+          ) : null}
         </View>
 
         <View
@@ -295,18 +307,52 @@ export function ArGuideScreen({ route }: Props) {
             left: 0,
             right: 0,
             bottom: insets.bottom + space.lg,
-            flexDirection: 'row',
-            justifyContent: 'center',
-            gap: space.md,
+            gap: space.sm,
             paddingHorizontal: space.lg,
           }}
         >
-          <Boton variant="secundario" onPress={recalibrar}>
-            Reiniciar
-          </Boton>
-          <Boton variant="secundario" onPress={() => setForzar2d(true)}>
-            Ver en 2D
-          </Boton>
+          {/* Qué falta y qué ya está, con el peso de lo que se ve. */}
+          {esperados.length > 0 ? (
+            <Fila gap={space.sm} wrap justify="center">
+              {esperados.map((id) => {
+                const visto = vistosAhora.has(id);
+                const n = cuentaCajas.get(id) ?? 0;
+                const peso = n > 0 ? estimarPeso(id, n) : null;
+                return (
+                  <View
+                    key={id}
+                    style={{
+                      paddingHorizontal: space.md,
+                      paddingVertical: space.xs,
+                      borderRadius: radius.full,
+                      backgroundColor: visto ? theme.color.exito : 'rgba(0,0,0,0.55)',
+                    }}
+                  >
+                    <Txt variant="chicoFuerte" color="#FFFFFF">
+                      {visto ? '✓' : '○'} {nombreDe(id)}
+                      {peso ? ` ${formatearPeso(peso.gramos)}` : ''}
+                    </Txt>
+                  </View>
+                );
+              })}
+            </Fila>
+          ) : null}
+          <Fila gap={space.sm} justify="center" wrap>
+            <Boton variant="secundario" onPress={() => setVerReceta((v) => !v)}>
+              {verReceta ? 'Ocultar receta' : 'Ver receta'}
+            </Boton>
+            {verReceta ? (
+              <Boton variant="secundario" onPress={() => setRecentrar((r) => r + 1)}>
+                Traer receta
+              </Boton>
+            ) : null}
+            <Boton variant="secundario" onPress={recalibrar}>
+              Reiniciar
+            </Boton>
+            <Boton variant="secundario" onPress={() => setForzar2d(true)}>
+              2D
+            </Boton>
+          </Fila>
         </View>
       </View>
     );

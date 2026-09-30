@@ -56,6 +56,22 @@ exponencial) en vez de reemplazarla, para que el marcador no pegue saltos.
 Un ancla sobrevive 4 segundos sin volver a verse: tapar la cebolla con la
 mano no tiene que hacer desaparecer el marcador.
 
+## Visor: cajas, pesos y receta flotante
+
+Además de los marcadores 3D, la pantalla dibuja **en el mismo cuadro** una
+caja (esquinas tipo visor) sobre cada ingrediente del catálogo que el
+detector reconoce, sea del paso o no (`DetectionOverlay`, `LiveBoxTracker`).
+Lo del paso va en verde con la cantidad de la receta; lo demás en blanco.
+
+Cada caja lleva un **peso estimado** (`ingredientWeights.ts`): peso típico
+por unidad × cuántas se ven. La cámara no es una balanza, por eso siempre
+dice "≈".
+
+La **receta** flota al costado, apoyada en el mundo (no pegada a la
+pantalla): título, paso actual y los ingredientes con tilde a medida que se
+ven. Se ubica al primer tracking normal; "Traer receta" la vuelve a poner
+al costado de donde mirás.
+
 ## Estados y qué le decimos al usuario
 
 Cada estado de seguimiento tiene un mensaje que dice **qué hacer**, no solo
